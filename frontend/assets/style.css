@@ -1,0 +1,94 @@
+#app {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+#result img {
+  box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15);
+  border-radius: 0.5rem;
+}
+
+.btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* 新增参数区样式 */
+#model, #width, #numImages, #guidanceScale {
+  margin-bottom: 10px;
+}
+
+/* 结果卡片样式 */
+.card-img-top {
+  border-radius: 8px 8px 0 0;
+}
+
+.card-body {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  overflow: visible !important;
+}
+
+/* 错误提示样式 */
+.alert {
+  max-width: 800px;
+  margin: 20px auto;
+}
+
+/* 工具提示终极样式 */
+.tooltip {
+  z-index: 99999 !important;
+}
+
+.tooltip-inner {
+  max-width: 500px !important;
+  padding: 15px !important;
+  background: rgba(0,0,0,0.95) !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  white-space: pre-line !important;
+}
+
+.tooltip-arrow {
+  display: none !important; /* 隐藏默认箭头 */
+}
+
+.bs-tooltip-auto[data-popper-placement^=top] .tooltip-arrow::before,
+.bs-tooltip-top .tooltip-arrow::before {
+  border-top-color: rgba(0,0,0,0.9);
+}
+
+/* 提示建议区域 */
+#promptSuggestions {
+  border-left: 3px solid #0d6efd;
+  padding-left: 1rem;
+  margin: 1rem 0;
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
+/* 确保没有其他样式覆盖 */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.input-group, .form-select {
+  overflow: visible !important;
+}
+
+.card, .container, #app {
+  overflow: visible !important;
+  position: static !important;
+}
+
+.btn-link.text-muted:hover {
+  opacity: 0.8;
+  text-decoration: none;
+} 

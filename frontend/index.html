@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI图片生成器</title>
+  <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="container mt-5">
+    <div class="card">
+      <div class="card-body">
+        <h1 class="text-center mb-4">AI图片生成</h1>
+        <div id="app">
+          <div class="row mb-3">
+            <div class="col-md-3">
+              <div class="d-flex align-items-center mb-1">
+                <label class="form-label small text-muted me-2">模型选择</label>
+                <button type="button" class="btn btn-link text-muted p-0 border-0" 
+                        tabindex="0"
+                        data-bs-toggle="tooltip" 
+                        data-bs-html="true"
+                        data-bs-original-title="<b>模型说明：</b><br>
+                        • FLUX.1-Schnell：快速生成模型<br>
+                        • SDXL-Turbo：高质量生成模型">
+                  <i class="bi bi-info-circle"></i>
+                </button>
+              </div>
+              <select id="model" class="form-select">
+                <option value="black-forest-labs/FLUX.1-schnell">FLUX.1 Schnell</option>
+                <option value="stability-ai/sdxl-turbo">SDXL Turbo</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <div class="d-flex align-items-center mb-1">
+                <label class="form-label small text-muted me-2">图片尺寸</label>
+                <i class="bi bi-info-circle text-muted"
+                   data-bs-toggle="tooltip"
+                   data-bs-html="true"
+                   data-bs-original-title="<b>分辨率建议：</b><br>
+                   • 512px：快速草图/低配置设备<br>
+                   • 768px：平衡速度与质量<br>
+                   • 1024px：高细节输出（推荐）<br>
+                   <small class='text-muted'>部分模型要求宽高相同</small>"></i>
+              </div>
+              <select id="width" class="form-select">
+                <option value="512">512px</option>
+                <option value="768">768px</option>
+                <option value="1024" selected>1024px</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <div class="d-flex align-items-center mb-1">
+                <label class="form-label small text-muted me-2">生成数量</label>
+                <i class="bi bi-info-circle text-muted"
+                   data-bs-toggle="tooltip"
+                   data-bs-html="true"
+                   data-bs-original-title="<b>批量生成：</b><br>
+                   • 范围：1-4张/次<br>
+                   • 数量越多消耗资源越大<br>
+                   • 建议根据GPU性能选择"></i>
+              </div>
+              <input type="number" id="numImages" class="form-control" 
+                     min="1" max="4" value="1">
+            </div>
+            <div class="col-md-3">
+              <div class="d-flex align-items-center mb-1">
+                <label class="form-label small text-muted me-2">CFG Scale</label>
+                <i class="bi bi-info-circle text-muted"
+                   data-bs-toggle="tooltip"
+                   data-bs-html="true"
+                   data-bs-original-title="<b>指导强度：</b><br>
+                   • 低值(3.8)：创意发散<br>
+                   • 默认(4.0)：平衡模式<br>
+                   • 高值(4.2)：严格遵循提示<br>
+                   <small class='text-muted'>FLUX模型专用参数</small>"></i>
+              </div>
+              <input type="number" id="guidanceScale" class="form-control"
+                     step="0.1" min="3.8" max="4.2" value="4.0">
+            </div>
+          </div>
+          <div class="input-group mb-3">
+            <input type="text" id="prompt" class="form-control" 
+                   placeholder="请输入图片描述（例如：赛博朋克风格的城市夜景）">
+            <button id="generateBtn" class="btn btn-primary">
+              生成
+              <i class="bi bi-info-circle ms-2" 
+                 data-bs-toggle="tooltip" 
+                 data-bs-html="true"
+                 data-bs-original-title="<b>参数说明：</b><br>
+                  - 模型选择：FLUX速度快，SDXL质量高<br>
+                  - CFG Scale：值越高越贴近描述"></i>
+            </button>
+          </div>
+          <div id="result" class="text-center"></div>
+        </div>
+        <!-- 隐藏的高度输入框 -->
+        <input type="hidden" id="height" value="1024">
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+  <script src="https://cdn.bootcdn.net/ajax/libs/popper.js/2.11.8/umd/popper.min.js"></script>
+  <script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+  <script src="app.js"></script>
+
+  <!-- 在body结束前添加调试元素 -->
+  <div id="tooltip-debug" style="position: fixed; top: 0; right: 0; z-index: 99999">
+    工具提示层级测试
+  </div>
+</body>
+</html> 

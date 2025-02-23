@@ -1,0 +1,19 @@
+﻿version: '3.8'
+
+services:
+  backend:
+    build: ./src
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./src:/app/src
+    environment:
+      - SILICONFLOW_API_KEY=${API_KEY}
+      - LOG_LEVEL=INFO
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend 

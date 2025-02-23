@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link href="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+  <!-- 测试元素 -->
+  <button class="btn btn-primary mt-5" 
+          data-bs-toggle="tooltip" 
+          data-bs-html="true"
+          title="<b>测试提示</b><br>第二行内容">
+    悬停测试
+  </button>
+
+  <!-- 依赖 -->
+  <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+  <script src="https://cdn.bootcdn.net/ajax/libs/popper.js/2.11.8/umd/popper.min.js"></script>
+  <script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+  
+  <!-- 最简初始化 -->
+  <script>
+    $(function(){
+      new bootstrap.Tooltip(document.querySelector('[data-bs-toggle="tooltip"]'), {
+        placement: 'right',
+        trigger: 'hover',
+        html: true
+      })
+    })
+  </script>
+</body>
+</html>

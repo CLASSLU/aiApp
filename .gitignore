@@ -1,0 +1,11 @@
+# 虚拟环境
+.venv/
+venv/
+
+# IDE配置
+.vscode/
+.idea/
+
+# 依赖目录
+__pycache__/
+node_modules/ 
