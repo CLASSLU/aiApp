@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, jsonify, request, Response
+from flask import Flask, jsonify, request, Response, send_from_directory
 from dotenv import load_dotenv
 from flask_cors import CORS
-from .api_client import SiliconFlowClient
+from .api_client import LoggingSiliconFlowClient
 import os
 from pathlib import Path
 from datetime import datetime
 import requests
 import random
+from werkzeug.exceptions import BadRequest
+from urllib.parse import urlparse
+from logging.config import dictConfig
+import time
+import logging
 
 # 确保从项目根目录加载.env
 env_path = Path(__file__).resolve().parent.parent / '.env'
@@ -21,14 +26,59 @@ print(f"文件内容：{env_path.read_text(encoding='utf-8')}")
 
 os.environ['SILICONFLOW_API_KEY'] = 'sk-judexvqbahpknepuihvfqhidhkdyymmwjysdikrgtievnjnv'  # 临时方案
 
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 def create_app():
     app = Flask(__name__)
+    
+    # 先初始化CORS
     CORS(app, resources={r"/api/*": {
         "origins": "http://localhost:3000",
         "methods": ["POST", "OPTIONS"],
-        "allow_headers": "Content-Type",
-        "supports_credentials": True
+        "allow_headers": ["Content-Type", "Authorization", "X-Request-Source"],
+        "supports_credentials": True,
+        "max_age": 600
     }})
+
+    def get_request_source(request):
+        """判断请求来源"""
+        if request.headers.get('X-Request-Source') == 'webapp':
+            return 'Frontend'
+        elif request.referrer and 'localhost:3000' in request.referrer:
+            return 'Frontend'
+        else:
+            return 'External'
+
+    # 添加请求日志中间件
+    @app.before_request
+    def log_request_info():
+        request.start_time = time.perf_counter()  # 记录请求开始时间
+        logger.info(f"""
+        [Request] {request.method} {request.path}
+        Client IP: {request.remote_addr}
+        Headers: {dict(request.headers)}
+        Params: {dict(request.args)}
+        Body: {request.get_json(silent=True) or {}}
+        """)
+
+    # 添加高精度计时中间件
+    @app.before_request
+    def start_timer():
+        request.start_time = time.perf_counter()
+
+    # 修改响应日志中间件
+    @app.after_request
+    def log_response_info(response):
+        duration = (time.perf_counter() - request.start_time) * 1000  # 转换为毫秒
+        logger.info(f"""
+        [Response] {request.method} {request.path} => {response.status_code}
+        Duration: {duration:.2f}ms
+        Headers: {dict(response.headers)}
+        Body: {response.get_data(as_text=True)[:500]}...
+        """)
+        return response
 
     @app.route('/')
     def health_check():
@@ -38,116 +88,123 @@ def create_app():
     def generate():
         if request.method == 'OPTIONS':
             return _build_cors_preflight_response()
+        
+        # 内容类型检查
+        if 'application/json' not in request.content_type:
+            return jsonify({"error": "Unsupported Media Type"}), 415
+
         try:
-            if not request.get_data():
-                return jsonify({"error": "请求体不能为空"}), 400
-            app.logger.info(f"收到生成请求: {request.json}")
+            data = request.get_json()
             
-            # 参数验证逻辑
-            data = request.json
-            required_fields = ['prompt', 'model', 'width', 'height', 'num_images']
-            if not all(field in data for field in required_fields):
-                app.logger.error(f"缺少必要参数: {data}")
-                return jsonify({"error": "缺少必要参数"}), 400
-            
-            if data['width'] not in [512, 768, 1024] or data['height'] not in [512, 768, 1024]:
-                return jsonify({"error": "分辨率只支持512x512, 768x768, 1024x1024"}), 400
-            
-            if data['num_images'] < 1 or data['num_images'] > 4:
-                return jsonify({"error": "生成数量需在1-4张之间"}), 400
-            
-            # 验证FLUX模型专用参数
-            if data.get('model') == 'black-forest-labs/FLUX.1-schnell':
-                if data.get('steps', 50) != 4:
-                    return jsonify({"error": "FLUX模型必须使用4步推理"}), 400
-                if not (3.8 <= float(data.get('guidance_scale', 3.0)) <= 4.2):
-                    return jsonify({"error": "FLUX模型CFG Scale需在3.8-4.2之间"}), 400
-            
-            # 验证guidance_scale范围
-            guidance_scale = float(data.get('guidance_scale', 3.0))
-            if not (2.0 <= guidance_scale <= 10.0):
-                return jsonify({"error": "CFG Scale需在2.0到10.0之间"}), 400
-            
-            # 验证参数类型
-            try:
-                width = int(data['width'])
-                height = int(data['height'])
-                if (width, height) not in [(512,512), (768,768), (1024,1024)]:
-                    return jsonify({"error": "仅支持512x512, 768x768, 1024x1024分辨率"}), 400
-                seed = int(data.get('seed', 0))
-                if seed < 0:
-                    return jsonify({"error": "种子值必须≥0"}), 400
-            except ValueError:
-                return jsonify({"error": "参数必须为整数"}), 400
-            
-            # 构造API请求体
+            # 构造API请求参数
             payload = {
                 "prompt": data['prompt'],
-                "model": "black-forest-labs/FLUX.1-schnell",
+                "model": data.get('model', 'black-forest-labs/FLUX.1-schnell'),
                 "width": data['width'],
                 "height": data['height'],
                 "batch_size": data['num_images'],
                 "num_inference_steps": 4,
-                "guidance_scale": 4.0,
-                "use_fast_sampler": True,
+                "guidance_scale": data.get('guidance_scale', 4.0),
                 "variation_seed": random.randint(0, 999999999),
                 "variation_strength": 0.7
             }
             
-            # 添加硅流要求的请求头
-            headers = {
-                "X-Request-Source": "myapp/1.0.0",
-                "X-Request-ID": request.headers.get('X-Request-ID', '')
-            }
+            # 使用LoggingSiliconFlowClient
+            client = LoggingSiliconFlowClient()  # 通过环境变量自动获取API密钥
+            result = client.generate_image(payload)
             
-            # 调用API时添加头信息
-            client = SiliconFlowClient()
-            result = client.generate_image(payload, headers)
+            # 返回真实图片URL
             return jsonify({
-                "images": result['images'],
+                "images": [img['url'] for img in result['images']],
                 "usage": {
-                    "duration": result['timings']['inference'],
-                    "credits_used": result['credits_used']
+                    "duration": result.get('timings', {}).get('inference', 0),
+                    "credits_used": result.get('credits_used', 0)
                 }
-            })
+            }), 200
+            
+        except KeyError as e:
+            logger.error(f"参数错误：{str(e)}")
+            return jsonify({"error": f"缺少必要参数：{str(e)}"}), 400
         except Exception as e:
-            app.logger.error(f"生成失败: {str(e)}", exc_info=True)
-            return jsonify({"error": str(e)}), 500
+            logger.error(f"生成失败：{str(e)}", exc_info=True)
+            return jsonify({"error": "图像生成失败"}), 500
 
     @app.route('/api/download', methods=['GET'])
     def download_proxy():
         try:
+            # 添加参数验证
             image_url = request.args.get('url')
             if not image_url:
-                return jsonify({"error": "缺少图片URL参数"}), 400
+                return jsonify({"error": "缺少url参数"}), 400
             
-            # 设置合理的超时时间
-            response = requests.get(image_url, timeout=10)
+            # 添加安全验证
+            allowed_domains = [
+                'sc-maas.oss-cn-shanghai.aliyuncs.com',
+                'cdn.siliconflow.com'
+            ]
+            if not any(domain in image_url for domain in allowed_domains):
+                return jsonify({"error": "非法的图片地址"}), 403
+            
+            # 设置合理的超时时间和请求头
+            response = requests.get(
+                image_url,
+                timeout=10,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                },
+                stream=True
+            )
             response.raise_for_status()
             
+            # 获取文件名
+            filename = image_url.split('/')[-1].split('?')[0]
+            
             return Response(
-                response.content,
-                mimetype=response.headers['Content-Type'],
+                response.iter_content(chunk_size=8192),
+                mimetype=response.headers.get('Content-Type', 'application/octet-stream'),
                 headers={
-                    'Content-Disposition': f'attachment; filename="generated-image.png"'
+                    'Content-Disposition': f'attachment; filename="{filename}"',
+                    'Cache-Control': 'max-age=3600'
                 }
             )
-        except Exception as e:
-            app.logger.error(f"下载失败: {str(e)}")
-            return jsonify({"error": "图片下载失败"}), 500
+        except requests.exceptions.Timeout:
+            logger.error("下载超时")
+            return jsonify({"error": "下载超时"}), 504
+        except requests.exceptions.RequestException as e:
+            logger.error(f"下载失败: {str(e)}")
+            return jsonify({"error": f"图片下载失败: {str(e)}"}), 500
 
     @app.route('/api/chat', methods=['POST'])
     def chat():
         # 确保路由存在
         return jsonify({"status": "ok"})
 
-    @app.after_request
-    def add_cors_headers(response):
-        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization'
-        response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS'
-        response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition'
+    @app.route('/static/<path:filename>')
+    def serve_static(filename):
+        return send_from_directory(
+            os.path.join(app.root_path, '..', 'frontend', 'static'),
+            filename
+        )
+
+    def _build_cors_preflight_response():
+        response = jsonify({'status': 'preflight'})
+        response.headers.add("Access-Control-Allow-Origin", "http://localhost:3000")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Request-Source")
+        response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+        response.headers.add("Access-Control-Max-Age", "600")
         return response
+
+    def validate_image_url(url):
+        """验证图片URL是否合法"""
+        try:
+            parsed = urlparse(url)
+            if parsed.scheme not in ('http', 'https'):
+                return False
+            if not any(parsed.netloc.endswith(domain) for domain in ALLOWED_DOMAINS):
+                return False
+            return True
+        except:
+            return False
 
     return app
 
@@ -156,10 +213,4 @@ app = create_app()
 if __name__ == '__main__':
     app.debug = True
     app.config['PROPAGATE_EXCEPTIONS'] = True
-    app.run(host='0.0.0.0')
-
-def _build_cors_preflight_response():
-    response = jsonify({'status': 'preflight'})
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
-    response.headers.add('Access-Control-Allow-Methods', 'POST')
-    return response 
+    app.run(host='0.0.0.0', port=5000) 

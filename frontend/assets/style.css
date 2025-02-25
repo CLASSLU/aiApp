@@ -1,94 +1,124 @@
-#app {
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-#result img {
-  box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15);
-  border-radius: 0.5rem;
-}
-
-.btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-/* 新增参数区样式 */
-#model, #width, #numImages, #guidanceScale {
-  margin-bottom: 10px;
-}
-
-/* 结果卡片样式 */
-.card-img-top {
-  border-radius: 8px 8px 0 0;
-}
-
-.card-body {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px;
-  overflow: visible !important;
-}
-
-/* 错误提示样式 */
-.alert {
-  max-width: 800px;
-  margin: 20px auto;
-}
-
-/* 工具提示终极样式 */
-.tooltip {
-  z-index: 99999 !important;
-}
-
-.tooltip-inner {
-  max-width: 500px !important;
-  padding: 15px !important;
-  background: rgba(0,0,0,0.95) !important;
-  border-radius: 8px !important;
-  font-size: 14px !important;
-  line-height: 1.6 !important;
-  white-space: pre-line !important;
-}
-
-.tooltip-arrow {
-  display: none !important; /* 隐藏默认箭头 */
-}
-
-.bs-tooltip-auto[data-popper-placement^=top] .tooltip-arrow::before,
-.bs-tooltip-top .tooltip-arrow::before {
-  border-top-color: rgba(0,0,0,0.9);
-}
-
-/* 提示建议区域 */
-#promptSuggestions {
-  border-left: 3px solid #0d6efd;
-  padding-left: 1rem;
-  margin: 1rem 0;
-  background: #f8f9fa;
-  border-radius: 4px;
-}
-
-/* 确保没有其他样式覆盖 */
+/* 基本重置 */
 * {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Arial', sans-serif;
+  background-color: #e9ecef; /* 更柔和的背景色 */
+  color: #343a40; /* 更深的文本颜色 */
+  line-height: 1.6;
 }
 
-.input-group, .form-select {
-  overflow: visible !important;
+/* 容器样式 */
+.container {
+  max-width: 800px;
+  margin: 20px auto; /* 增加顶部间距 */
+  padding: 30px; /* 增加内边距 */
+  background: #ffffff; /* 白色背景 */
+  border-radius: 10px; /* 圆角 */
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); /* 更柔和的阴影 */
 }
 
-.card, .container, #app {
-  overflow: visible !important;
-  position: static !important;
+/* 标题样式 */
+h1 {
+  text-align: center;
+  margin-bottom: 30px; /* 增加底部间距 */
+  color: #007bff; /* 更加鲜明的主色 */
 }
 
-.btn-link.text-muted:hover {
-  opacity: 0.8;
-  text-decoration: none;
-} 
+/* 表单样式 */
+form {
+  background: #f8f9fa; /* 更加柔和的表单背景 */
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px; /* 增加底部间距 */
+}
+
+/* 输入框样式 */
+input[type="text"],
+input[type="number"],
+select {
+  width: 100%;
+  padding: 12px; /* 增加内边距 */
+  margin: 12px 0; /* 增加上下间距 */
+  border: 1px solid #ced4da; /* 更柔和的边框颜色 */
+  border-radius: 5px; /* 圆角 */
+}
+
+/* 按钮样式 */
+button {
+  background-color: #007bff; /* 更加鲜明的主色 */
+  color: white;
+  border: none;
+  padding: 12px 20px; /* 增加内边距 */
+  border-radius: 5px; /* 圆角 */
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  display: flex;
+  align-items: center;
+  font-size: 16px; /* 增加字体大小 */
+}
+
+button:hover {
+  background-color: #0056b3; /* 悬停效果 */
+}
+
+/* 结果区域样式 */
+#result {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 30px; /* 增加顶部间距 */
+}
+
+#result img {
+  max-width: 100%;
+  height: auto;
+  margin: 10px;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+/* 提示词建议样式 */
+#promptSuggestions {
+  background: #f9f9f9;
+  border: 1px solid #ddd;
+  padding: 15px; /* 增加内边距 */
+  border-radius: 4px;
+  margin-top: 15px; /* 增加顶部间距 */
+}
+
+/* 添加选择框样式 */
+.form-select {
+    width: 100%;
+    padding: 12px;
+    margin: 12px 0;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    background-color: #fff;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px 12px;
+    appearance: none;
+}
+
+/* 添加分辨率选择器样式 */
+.resolution-group {
+    position: relative;
+    margin: 12px 0;
+}
+
+.resolution-group::after {
+    content: "像素";
+    position: absolute;
+    right: 40px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6c757d;
+    pointer-events: none;
+}

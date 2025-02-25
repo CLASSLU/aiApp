@@ -1,115 +1,51 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI图片生成器</title>
-  <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/5.3.0/css/bootstrap.min.css">
-  <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="assets/style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI图像生成平台</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" 
+          integrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0v4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" 
+          crossorigin="anonymous">
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js" as="script">
 </head>
 <body>
-  <div class="container mt-5">
-    <div class="card">
-      <div class="card-body">
-        <h1 class="text-center mb-4">AI图片生成</h1>
-        <div id="app">
-          <div class="row mb-3">
-            <div class="col-md-3">
-              <div class="d-flex align-items-center mb-1">
-                <label class="form-label small text-muted me-2">模型选择</label>
-                <button type="button" class="btn btn-link text-muted p-0 border-0" 
-                        tabindex="0"
-                        data-bs-toggle="tooltip" 
-                        data-bs-html="true"
-                        data-bs-original-title="<b>模型说明：</b><br>
-                        • FLUX.1-Schnell：快速生成模型<br>
-                        • SDXL-Turbo：高质量生成模型">
-                  <i class="bi bi-info-circle"></i>
-                </button>
-              </div>
-              <select id="model" class="form-select">
+    <div class="container">
+        <h1>AI图像生成平台</h1>
+        <form id="generateForm">
+            <input type="text" id="prompt" placeholder="请输入图片描述" required data-bs-toggle="tooltip" title="请输入您想生成的图像描述，例如：一个宁静的海滩日落。">
+            <select id="model" data-bs-toggle="tooltip" title="选择要使用的模型。">
                 <option value="black-forest-labs/FLUX.1-schnell">FLUX.1 Schnell</option>
-                <option value="stability-ai/sdxl-turbo">SDXL Turbo</option>
-              </select>
+                <!-- 其他模型选项 -->
+            </select>
+            <div class="resolution-group">
+                <select id="resolution" class="form-select" required 
+                        data-bs-toggle="tooltip" title="选择生成图像的分辨率（宽高相同）">
+                    <option value="512">512×512</option>
+                    <option value="768">768×768</option>
+                    <option value="1024" selected>1024×1024</option>
+                </select>
             </div>
-            <div class="col-md-3">
-              <div class="d-flex align-items-center mb-1">
-                <label class="form-label small text-muted me-2">图片尺寸</label>
-                <i class="bi bi-info-circle text-muted"
-                   data-bs-toggle="tooltip"
-                   data-bs-html="true"
-                   data-bs-original-title="<b>分辨率建议：</b><br>
-                   • 512px：快速草图/低配置设备<br>
-                   • 768px：平衡速度与质量<br>
-                   • 1024px：高细节输出（推荐）<br>
-                   <small class='text-muted'>部分模型要求宽高相同</small>"></i>
-              </div>
-              <select id="width" class="form-select">
-                <option value="512">512px</option>
-                <option value="768">768px</option>
-                <option value="1024" selected>1024px</option>
-              </select>
-            </div>
-            <div class="col-md-3">
-              <div class="d-flex align-items-center mb-1">
-                <label class="form-label small text-muted me-2">生成数量</label>
-                <i class="bi bi-info-circle text-muted"
-                   data-bs-toggle="tooltip"
-                   data-bs-html="true"
-                   data-bs-original-title="<b>批量生成：</b><br>
-                   • 范围：1-4张/次<br>
-                   • 数量越多消耗资源越大<br>
-                   • 建议根据GPU性能选择"></i>
-              </div>
-              <input type="number" id="numImages" class="form-control" 
-                     min="1" max="4" value="1">
-            </div>
-            <div class="col-md-3">
-              <div class="d-flex align-items-center mb-1">
-                <label class="form-label small text-muted me-2">CFG Scale</label>
-                <i class="bi bi-info-circle text-muted"
-                   data-bs-toggle="tooltip"
-                   data-bs-html="true"
-                   data-bs-original-title="<b>指导强度：</b><br>
-                   • 低值(3.8)：创意发散<br>
-                   • 默认(4.0)：平衡模式<br>
-                   • 高值(4.2)：严格遵循提示<br>
-                   <small class='text-muted'>FLUX模型专用参数</small>"></i>
-              </div>
-              <input type="number" id="guidanceScale" class="form-control"
-                     step="0.1" min="3.8" max="4.2" value="4.0">
-            </div>
-          </div>
-          <div class="input-group mb-3">
-            <input type="text" id="prompt" class="form-control" 
-                   placeholder="请输入图片描述（例如：赛博朋克风格的城市夜景）">
-            <button id="generateBtn" class="btn btn-primary">
-              生成
-              <i class="bi bi-info-circle ms-2" 
-                 data-bs-toggle="tooltip" 
-                 data-bs-html="true"
-                 data-bs-original-title="<b>参数说明：</b><br>
-                  - 模型选择：FLUX速度快，SDXL质量高<br>
-                  - CFG Scale：值越高越贴近描述"></i>
-            </button>
-          </div>
-          <div id="result" class="text-center"></div>
-        </div>
-        <!-- 隐藏的高度输入框 -->
-        <input type="hidden" id="height" value="1024">
-      </div>
+            <input type="hidden" id="width" value="1024">
+            <input type="hidden" id="height" value="1024">
+            <input type="number" id="numImages" value="1" required data-bs-toggle="tooltip" title="设置生成图像的数量，范围为1到4。">
+            <select id="guidanceScale" class="form-select" required data-bs-toggle="tooltip" title="FLUX模型推荐3.8-4.2（根据文档要求）">
+                <option value="3.8">3.8 - 默认推荐</option>
+                <option value="3.9">3.9</option>
+                <option value="4.0">4.0</option>
+                <option value="4.1">4.1</option>
+                <option value="4.2">4.2</option>
+            </select>
+            <button type="button" id="generateBtn"><i class="fas fa-image"></i> 生成</button>
+        </form>
+        <div id="result"></div>
+        <div id="promptSuggestions"></div>
     </div>
-  </div>
-
-  <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-  <script src="https://cdn.bootcdn.net/ajax/libs/popper.js/2.11.8/umd/popper.min.js"></script>
-  <script src="https://cdn.bootcdn.net/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
-  <script src="app.js"></script>
-
-  <!-- 在body结束前添加调试元素 -->
-  <div id="tooltip-debug" style="position: fixed; top: 0; right: 0; z-index: 99999">
-    工具提示层级测试
-  </div>
+    <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="app.js"></script>
+    <script src="https://unpkg.com/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
 </body>
-</html> 
+</html>
