@@ -176,8 +176,46 @@ def create_app():
 
     @app.route('/api/chat', methods=['POST'])
     def chat():
-        # 确保路由存在
-        return jsonify({"status": "ok"})
+        """处理用户的聊天请求"""
+
+        # 检查请求的内容类型
+        if request.content_type is None or 'application/json' not in request.content_type:
+            return jsonify({"error": "Unsupported Media Type"}), 415
+
+        try:
+            data = request.get_json()
+            session_id = data.get('session_id')
+            user_input = data.get('user_input')
+
+            if not session_id or not user_input:
+                return jsonify({"error": "缺少必要参数：session_id 或 user_input"}), 400
+
+            # 构造请求参数
+            payload = {
+                "model": "deepseek-ai/DeepSeek-V2.5",  # 使用的AI模型
+                "messages": [
+                    {"role": "user", "content": user_input}
+                ],
+                "temperature": 0.7,
+                "max_tokens": 150
+            }
+
+            # 使用LoggingSiliconFlowClient
+            client = LoggingSiliconFlowClient()  # 通过环境变量自动获取API密钥
+            result = client.chat_completion(payload)
+
+            # 返回生成的回复
+            return jsonify({
+                "session_id": session_id,
+                "reply": result.get('choices', [{}])[0].get('message', {}).get('content', '')
+            }), 200
+
+        except KeyError as e:
+            logger.error(f"参数错误：{str(e)}")
+            return jsonify({"error": f"缺少必要参数：{str(e)}"}), 400
+        except Exception as e:
+            logger.error(f"生成失败：{str(e)}", exc_info=True)
+            return jsonify({"error": "对话生成失败"}), 500
 
     @app.route('/static/<path:filename>')
     def serve_static(filename):
@@ -199,8 +237,6 @@ def create_app():
         try:
             parsed = urlparse(url)
             if parsed.scheme not in ('http', 'https'):
-                return False
-            if not any(parsed.netloc.endswith(domain) for domain in ALLOWED_DOMAINS):
                 return False
             return True
         except:

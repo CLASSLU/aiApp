@@ -192,15 +192,13 @@ $(document).ready(function() {
           .closest('.form-group').toggle(isFlux);
   });
 
-  // 保留原有的事件监听代码
-  // document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
-  //     el.addEventListener('shown.bs.tooltip', () => {
-  //         console.log('工具提示已显示:', el);
-  //     });
-  //     el.addEventListener('hidden.bs.tooltip', () => {
-  //         console.log('工具提示已隐藏:', el);
-  //     });
-  // });
+  // 添加回车事件监听
+  $prompt.keypress(function (event) {
+    if (event.key === 'Enter') {
+        event.preventDefault(); // 防止默认行为
+        $generateBtn.click(); // 触发生成按钮的点击事件
+    }
+  });
 });
 
 async function generateImage() {
@@ -234,3 +232,21 @@ async function generateImage() {
         console.error('Error:', error);
     }
 }
+
+document.getElementById('generateBtn').addEventListener('click', async () => {
+    const userInput = document.getElementById('prompt').value;
+    const sessionId = 'abc123'; // 示例会话ID
+
+    if (!userInput) return;
+
+    // 生成图像的逻辑
+    // ...
+});
+
+// 添加回车事件监听
+document.getElementById('prompt').addEventListener('keypress', function (event) {
+    if (event.key === 'Enter') {
+        event.preventDefault(); // 防止默认行为
+        document.getElementById('generateBtn').click(); // 触发生成按钮的点击事件
+    }
+});

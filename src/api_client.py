@@ -72,10 +72,11 @@ class SiliconFlowClient:
 
     def chat_completion(self, payload):
         """调用对话API"""
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+        headers = self.headers
+        
+        # 确保 payload 是字典格式
+        if isinstance(payload, tuple):
+            payload = payload[0]
         
         formatted_payload = {
             "model": payload["model"],
@@ -84,7 +85,7 @@ class SiliconFlowClient:
             "max_tokens": int(payload.get("max_tokens", 1024)),
             "stream": False
         }
-        
+        logger.info(f"请求参数: {formatted_payload}")
         try:
             response = requests.post(
                 f"{self.base_url}/chat/completions",
@@ -99,6 +100,8 @@ class SiliconFlowClient:
             if e.response:
                 status_code = e.response.status_code
                 error_msg += f" [状态码: {status_code}]"
+                error_details = e.response.json()  # 获取详细的错误信息
+                error_msg += f" [错误信息: {error_details}]"
                 raise RuntimeError(error_msg) from e
             else:
                 raise RuntimeError(error_msg) from e
@@ -113,21 +116,44 @@ class SiliconFlowClient:
     def _generate_request_id(self):
         return uuid.uuid4().hex[:8]
 
+class LoggingClient:
+    def __init__(self, client):
+        self.client = client
+
+    def _log_request(self, method_name, payload):
+        request_id = uuid.uuid4().hex[:8]
+        logger.info(f"[Remote Request] ID:{request_id} Calling {method_name}")
+        logger.info(f"请求参数: {payload}")
+        start_time = time.perf_counter()
+        return request_id, start_time
+
+    def _log_response(self, request_id, method_name, duration, response):
+        logger.info(f"[Remote Response] ID:{request_id} {method_name} completed in {duration:.2f}s")
+        return response
+
+    def __getattr__(self, method_name):
+        # 代理方法调用
+        original_method = getattr(self.client, method_name)
+
+        def wrapper(*args, **kwargs):
+            request_id, start_time = self._log_request(method_name, args)
+            try:
+                response = original_method(*args, **kwargs)
+                duration = time.perf_counter() - start_time
+                return self._log_response(request_id, method_name, duration, response)
+            except Exception as e:
+                logger.error(f"[Remote Error] ID:{request_id} {str(e)}")
+                raise
+
+        return wrapper
+
+
 class LoggingSiliconFlowClient:
     def __init__(self, base_url="https://api.siliconflow.com/v1", api_key=None):
-        self.client = SiliconFlowClient(base_url, api_key)
+        self.client = LoggingClient(SiliconFlowClient(base_url, api_key))
 
     def generate_image(self, payload, custom_headers=None):
-        request_id = uuid.uuid4().hex[:8]  # 生成请求ID
-        logger.info(f"[Remote Request] ID:{request_id} POST /images/generations")
-        
-        start_time = time.perf_counter()
-        try:
-            response_data = self.client.generate_image(payload, custom_headers)
-            duration = time.perf_counter() - start_time
-            
-            logger.info(f"[Remote Response] ID:{request_id} 200 (Duration: {duration:.2f}s)")
-            return response_data
-        except requests.exceptions.RequestException as e:
-            logger.error(f"[Remote Error] ID:{request_id} {str(e)}")
-            raise 
+        return self.client.generate_image(payload, custom_headers)
+
+    def chat_completion(self, payload):
+        return self.client.chat_completion(payload)

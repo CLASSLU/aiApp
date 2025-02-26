@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 聊天功能</title>
+    <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>AI 聊天功能</h1>
+        <nav>
+            <ul>
+                <li><a href="index.html">主页</a></li>
+                <li><a href="chat.html">聊天功能</a></li>
+                <li><a href="generate.html">图像生成</a></li>
+            </ul>
+        </nav>
+        <div id="chat-container" style="border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll;">
+            <!-- 聊天记录将显示在这里 -->
+        </div>
+        <input type="text" id="user-input" placeholder="输入你的消息..." />
+        <button id="send-button">发送</button>
+    </div>
+    <script src="chat.js"></script>
+</body>
+</html>

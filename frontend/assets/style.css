@@ -7,31 +7,119 @@
 
 body {
   font-family: 'Arial', sans-serif;
-  background-color: #e9ecef; /* 更柔和的背景色 */
-  color: #343a40; /* 更深的文本颜色 */
+  background: url('background.jpg') no-repeat center center fixed, #000; /* 黑色背景 */
+  background-size: cover;
+  color: #fff; /* 白色文字 */
   line-height: 1.6;
+  min-height: 100vh;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 容器样式 */
 .container {
   max-width: 800px;
-  margin: 20px auto; /* 增加顶部间距 */
-  padding: 30px; /* 增加内边距 */
+  margin: 100px auto 0; /* 增加顶部间距 */
+  padding: 30px;
   background: #ffffff; /* 白色背景 */
   border-radius: 10px; /* 圆角 */
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); /* 更柔和的阴影 */
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); /* 阴影 */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
-/* 标题样式 */
-h1 {
-  text-align: center;
-  margin-bottom: 30px; /* 增加底部间距 */
-  color: #007bff; /* 更加鲜明的主色 */
+/* 标题和导航样式 */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0, 0, 0, 0.8); /* 黑色透明背景 */
+  width: 100%;
+  padding: 10px 20px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.logo {
+  font-size: 24px;
+  font-weight: bold;
+  color: #4A90E2;
+  width: 50px;
+  height: 50px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  padding: 20px;
+}
+
+.text-section, .carousel {
+  background: rgba(0, 0, 0, 0.5); /* 黑色透明背景 */
+  border-radius: 10px;
+  margin: 10px;
+}
+
+.text-section {
+  flex: 1;
+  padding: 20px;
+}
+
+nav ul {
+  list-style: none;
+  display: flex;
+  padding: 0;
+}
+
+nav ul li {
+  margin: 0 10px;
+}
+
+nav ul li a {
+  text-decoration: none;
+  color: #4A90E2;
+  font-weight: bold;
+  transition: color 0.3s;
+}
+
+nav ul li a:hover {
+  color: #0056b3;
+}
+
+.content {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Hero 区域样式 */
+.hero {
+  margin-bottom: 20px;
+}
+
+.hero h2 {
+  font-size: 28px; /* 增加字体大小 */
+  color: #333;
+}
+
+.hero p {
+  font-size: 18px; /* 增加字体大小 */
+  color: #666;
+  margin-top: 10px; /* 增加顶部间距 */
 }
 
 /* 表单样式 */
 form {
-  background: #f8f9fa; /* 更加柔和的表单背景 */
+  background: #f8f9fa; /* 表单背景 */
   padding: 20px;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -45,13 +133,13 @@ select {
   width: 100%;
   padding: 12px; /* 增加内边距 */
   margin: 12px 0; /* 增加上下间距 */
-  border: 1px solid #ced4da; /* 更柔和的边框颜色 */
+  border: 1px solid #ced4da; /* 边框颜色 */
   border-radius: 5px; /* 圆角 */
 }
 
 /* 按钮样式 */
 button {
-  background-color: #007bff; /* 更加鲜明的主色 */
+  background-color: #4A90E2; /* 按钮颜色 */
   color: white;
   border: none;
   padding: 12px 20px; /* 增加内边距 */
@@ -60,7 +148,7 @@ button {
   transition: background-color 0.3s ease;
   display: flex;
   align-items: center;
-  font-size: 16px; /* 增加字体大小 */
+  font-size: 16px; /* 字体大小 */
 }
 
 button:hover {
@@ -100,10 +188,6 @@ button:hover {
     border: 1px solid #ced4da;
     border-radius: 5px;
     background-color: #fff;
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right 12px center;
-    background-size: 16px 12px;
     appearance: none;
 }
 
@@ -121,4 +205,25 @@ button:hover {
     transform: translateY(-50%);
     color: #6c757d;
     pointer-events: none;
+}
+
+/* 页脚样式 */
+footer {
+  text-align: center;
+  padding: 20px 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: #666;
+  border-top: 1px solid #ddd;
+}
+
+.carousel {
+  flex: 1.5;
+  display: flex;
+  overflow: hidden;
+  height: 300px;
+}
+
+.carousel-item {
+  min-width: 100%;
+  transition: transform 0.5s ease;
 }
