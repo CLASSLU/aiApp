@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, jsonify, request, Response, send_from_directory
+from flask import Flask, jsonify, request, Response, send_from_directory, stream_with_context
 from dotenv import load_dotenv
 from flask_cors import CORS
 from .api_client import LoggingSiliconFlowClient
@@ -13,6 +13,8 @@ from urllib.parse import urlparse
 from logging.config import dictConfig
 import time
 import logging
+import json
+from threading import Event
 
 # 确保从项目根目录加载.env
 env_path = Path(__file__).resolve().parent.parent / '.env'
@@ -30,17 +32,22 @@ os.environ['SILICONFLOW_API_KEY'] = 'sk-judexvqbahpknepuihvfqhidhkdyymmwjysdikrg
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# 存储每个会话的停止事件
+session_stop_events = {}
+
 def create_app():
     app = Flask(__name__)
     
-    # 先初始化CORS
-    CORS(app, resources={r"/api/*": {
-        "origins": "http://localhost:3000",
-        "methods": ["POST", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization", "X-Request-Source"],
-        "supports_credentials": True,
-        "max_age": 600
-    }})
+    # 修改 CORS 配置
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
+            "methods": ["GET", "POST", "OPTIONS"],  # 添加 GET 方法
+            "allow_headers": ["Content-Type", "Authorization", "X-Request-Source"],
+            "supports_credentials": True,
+            "max_age": 600
+        }
+    })
 
     def get_request_source(request):
         """判断请求来源"""
@@ -72,11 +79,19 @@ def create_app():
     @app.after_request
     def log_response_info(response):
         duration = (time.perf_counter() - request.start_time) * 1000  # 转换为毫秒
+        
+        # 只记录文本类型的响应内容
+        content_type = response.headers.get('Content-Type', '')
+        if 'text' in content_type or 'json' in content_type:
+            body = response.get_data(as_text=True)[:500]
+        else:
+            body = '<binary data>'
+        
         logger.info(f"""
         [Response] {request.method} {request.path} => {response.status_code}
         Duration: {duration:.2f}ms
         Headers: {dict(response.headers)}
-        Body: {response.get_data(as_text=True)[:500]}...
+        Body: {body}...
         """)
         return response
 
@@ -174,48 +189,141 @@ def create_app():
             logger.error(f"下载失败: {str(e)}")
             return jsonify({"error": f"图片下载失败: {str(e)}"}), 500
 
+    @app.route('/api/stop', methods=['POST'])
+    def stop_generation():
+        try:
+            data = request.get_json()
+            session_id = data.get('session_id')
+            
+            if session_id in session_stop_events:
+                # 设置停止事件
+                session_stop_events[session_id].set()
+                # 清理事件
+                del session_stop_events[session_id]
+                return jsonify({"status": "success", "message": "已停止生成"})
+            
+            return jsonify({"status": "not_found", "message": "未找到对应的会话"}), 404
+            
+        except Exception as e:
+            logging.error(f"停止生成时出错: {str(e)}")
+            return jsonify({"status": "error", "message": str(e)}), 500
+
     @app.route('/api/chat', methods=['POST'])
     def chat():
         """处理用户的聊天请求"""
-
-        # 检查请求的内容类型
-        if request.content_type is None or 'application/json' not in request.content_type:
-            return jsonify({"error": "Unsupported Media Type"}), 415
-
         try:
             data = request.get_json()
             session_id = data.get('session_id')
             user_input = data.get('user_input')
+            messages = data.get('messages', [])
+            model = data.get('model', 'deepseek-ai/DeepSeek-V2.5')
 
             if not session_id or not user_input:
-                return jsonify({"error": "缺少必要参数：session_id 或 user_input"}), 400
+                return jsonify({"error": "缺少必要参数"}), 400
+
+            # 为新会话创建停止事件
+            stop_event = Event()
+            session_stop_events[session_id] = stop_event
 
             # 构造请求参数
             payload = {
-                "model": "deepseek-ai/DeepSeek-V2.5",  # 使用的AI模型
+                "model": model,
                 "messages": [
+                    *messages[-10:],
                     {"role": "user", "content": user_input}
                 ],
                 "temperature": 0.7,
-                "max_tokens": 150
+                "max_tokens": 2000,  # 增加最大token数
+                "stream": True
             }
 
-            # 使用LoggingSiliconFlowClient
-            client = LoggingSiliconFlowClient()  # 通过环境变量自动获取API密钥
-            result = client.chat_completion(payload)
+            logger.info(f"开始聊天请求，会话ID: {session_id}, 模型: {model}")
+            
+            # 使用单例模式的 LoggingSiliconFlowClient
+            client = LoggingSiliconFlowClient()
+            response = client.chat_completion(payload)
 
-            # 返回生成的回复
-            return jsonify({
-                "session_id": session_id,
-                "reply": result.get('choices', [{}])[0].get('message', {}).get('content', '')
-            }), 200
+            def generate():
+                try:
+                    for chunk in response:
+                        if stop_event.is_set():
+                            logger.info(f"会话 {session_id} 被用户终止")
+                            break
 
-        except KeyError as e:
-            logger.error(f"参数错误：{str(e)}")
-            return jsonify({"error": f"缺少必要参数：{str(e)}"}), 400
+                        if chunk and 'choices' in chunk and chunk['choices']:
+                            content = chunk['choices'][0].get('delta', {}).get('content', '')
+                            if content:
+                                logger.debug(f"生成内容: {content}")
+                                yield f"data: {json.dumps({'reply': content})}\n\n"
+                except Exception as e:
+                    logger.error(f"流式输出错误：{str(e)}", exc_info=True)
+                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                finally:
+                    if session_id in session_stop_events:
+                        del session_stop_events[session_id]
+                    yield "data: [DONE]\n\n"
+                    logger.info(f"会话 {session_id} 完成")
+
+            return Response(
+                stream_with_context(generate()),
+                mimetype='text/event-stream',
+                headers={
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    'X-Accel-Buffering': 'no'
+                }
+            )
+
         except Exception as e:
-            logger.error(f"生成失败：{str(e)}", exc_info=True)
-            return jsonify({"error": "对话生成失败"}), 500
+            logger.error(f"聊天生成失败：{str(e)}", exc_info=True)
+            return jsonify({
+                "error": "对话生成失败",
+                "detail": str(e)
+            }), 500
+
+    @app.route('/api/models', methods=['GET', 'OPTIONS'])
+    def get_models():
+        """获取可用的模型列表"""
+        if request.method == 'OPTIONS':
+            return _build_cors_preflight_response()
+
+        try:
+            client = LoggingSiliconFlowClient()
+            logger.info("开始获取模型列表")
+            models_data = client.get_models()
+            logger.info(f"成功获取模型列表: {json.dumps(models_data, ensure_ascii=False)[:200]}...")
+            
+            # 过滤出大语言模型
+            llm_models = []
+            for model in models_data.get("data", []):
+                # 检查模型ID是否包含常见的LLM模型标识
+                model_id = model.get("id", "").lower()
+                if any(name in model_id for name in [
+                    "deepseek", "qwen", "llama", "gpt", "glm", "marco", 
+                    "mistral", "mixtral", "yi", "baichuan"
+                ]):
+                    llm_models.append({
+                        "id": model.get("id"),
+                        "name": model.get("name", model.get("id")),
+                        "description": model.get("description", ""),
+                        "type": "llm"  # 设置类型为llm
+                    })
+            
+            # 按模型名称排序
+            llm_models.sort(key=lambda x: x["name"])
+            logger.info(f"过滤出 {len(llm_models)} 个大语言模型")
+            logger.info(f"大语言模型列表: {json.dumps(llm_models, ensure_ascii=False)}")
+            
+            return jsonify({
+                "models": llm_models
+            })
+
+        except Exception as e:
+            logger.error(f"获取模型列表失败：{str(e)}", exc_info=True)
+            return jsonify({
+                "error": "获取模型列表失败",
+                "detail": str(e)
+            }), 500
 
     @app.route('/static/<path:filename>')
     def serve_static(filename):
@@ -228,7 +336,8 @@ def create_app():
         response = jsonify({'status': 'preflight'})
         response.headers.add("Access-Control-Allow-Origin", "http://localhost:3000")
         response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Request-Source")
-        response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+        response.headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")  # 添加 GET 方法
+        response.headers.add("Access-Control-Allow-Credentials", "true")
         response.headers.add("Access-Control-Max-Age", "600")
         return response
 

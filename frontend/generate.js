@@ -250,3 +250,49 @@ document.getElementById('prompt').addEventListener('keypress', function (event) 
         document.getElementById('generateBtn').click(); // 触发生成按钮的点击事件
     }
 });
+
+// 添加下载按钮到图片旁边
+function addDownloadButton(imgUrl) {
+    const img = document.createElement('img');
+    img.src = imgUrl;
+    
+    const downloadBtn = document.createElement('a');
+    downloadBtn.href = imgUrl;
+    downloadBtn.className = 'download-btn';
+    downloadBtn.innerHTML = '<i class="fas fa-download"></i>';
+    downloadBtn.setAttribute('download', '');
+    downloadBtn.onclick = async (e) => {
+        e.preventDefault();
+        try {
+            const response = await fetch(`/api/download?url=${encodeURIComponent(imgUrl)}`);
+            if (!response.ok) throw new Error('下载失败');
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = imgUrl.split('/').pop() || 'generated-image.png';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error('下载出错:', error);
+            alert('下载失败，请重试');
+        }
+    };
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'image-wrapper';
+    wrapper.appendChild(img);
+    wrapper.appendChild(downloadBtn);
+    
+    document.getElementById('result').appendChild(wrapper);
+}
+
+// 更新生成图片的显示方式
+function displayImages(images) {
+    const resultDiv = document.getElementById('result');
+    resultDiv.innerHTML = '';
+    images.forEach(imgUrl => addDownloadButton(imgUrl));
+}
