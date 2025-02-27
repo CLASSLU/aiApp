@@ -198,20 +198,32 @@ class LoggingSiliconFlowClient:
 
     def __init__(self):
         if not LoggingSiliconFlowClient._instance:
-            self.base_url = "https://api.siliconflow.com/v1"
+            # 验证环境变量
+            api_key = os.getenv('SILICONFLOW_API_KEY')
+            if not api_key:
+                raise ValueError("未设置 SILICONFLOW_API_KEY 环境变量")
+            if not api_key.startswith('sk-'):
+                raise ValueError("API Key 格式不正确，应以 'sk-' 开头")
+
+            # 初始化客户端
+            self.base_url = "https://api.siliconflow.com/v1"  # 或其他正确的基础URL
             self.headers = {
-                "Authorization": f"Bearer {os.getenv('SILICONFLOW_API_KEY')}",
-                "Content-Type": "application/json"
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json"  # 明确指定接受 JSON 响应
             }
             self.timeout = 30
+            
+            
             LoggingSiliconFlowClient._instance = self
             LoggingSiliconFlowClient._session = requests.Session()
-            logger.info(f"SiliconFlow客户端初始化完成，API密钥: {self.headers['Authorization'][:10]}...")
+            logger.info(f"SiliconFlow客户端初始化完成")
         else:
             self.base_url = LoggingSiliconFlowClient._instance.base_url
             self.headers = LoggingSiliconFlowClient._instance.headers
             self.timeout = LoggingSiliconFlowClient._instance.timeout
 
+   
     def generate_response(self, data, stop_event):
         """处理流式响应生成，支持中途停止"""
         try:
@@ -274,10 +286,10 @@ class LoggingSiliconFlowClient:
             self._current_request = None
 
     def generate_image(self, payload, custom_headers=None):
-        logger.info("进入generate_image方法")
+        logger.debug("进入generate_image方法")
         """调用生图API"""
         headers = {**self.headers, **(custom_headers or {})}
-        
+        logger.info(f"生图请求头: {headers}")
         # 硅流API要求的参数结构
         formatted_payload = {
             "model": payload["model"],
@@ -291,6 +303,7 @@ class LoggingSiliconFlowClient:
             "variation_seed": payload.get("variation_seed", 0),
             "variation_strength": 0.7
         }
+        logger.info(f"生图请求参数: {formatted_payload}")
         
         try:
            
@@ -303,7 +316,7 @@ class LoggingSiliconFlowClient:
                     
             response.raise_for_status()
             response_data = response.json()
-            
+            logger.info(f"生图响应数据: {response_data}")
             return {
                 "images": [{"url": img["url"] for img in response_data.get('data', [])}],
                 "credits_used": response_data.get('credits_used', 0)
@@ -393,8 +406,8 @@ class LoggingSiliconFlowClient:
     def get_models(self):
         """获取可用的模型列表"""
         try:
-            logger.info(f"正在请求模型列表，URL: {self.base_url}/models")
-            logger.info(f"请求头: {self._safe_headers(self.headers)}")
+            logger.info("正在请求模型列表，URL: %s/models", self.base_url)
+            logger.info("请求头: %s", self._safe_headers(self.headers))
             
             response = requests.get(
                 f"{self.base_url}/models",
@@ -403,21 +416,25 @@ class LoggingSiliconFlowClient:
             )
             
             logger.info(f"模型列表响应状态码: {response.status_code}")
-            response.raise_for_status()
             
-            response_data = response.json()
-            logger.info(f"获取到 {len(response_data.get('data', []))} 个模型")
-            return response_data
+            # 记录响应内容
+            try:
+                response_data = response.json()
+                logger.info(f"API响应内容: {json.dumps(response_data, ensure_ascii=False, indent=2)}")
+            except json.JSONDecodeError:
+                logger.warning(f"API响应内容(非JSON): {response.text[:200]}")
+            
+            response.raise_for_status()  # 确保请求成功
+            
+            return response.json()
             
         except requests.exceptions.RequestException as e:
             error_msg = f"获取模型列表失败: {str(e)}"
             if hasattr(e, 'response') and e.response:
-                error_msg += f" [状态码: {e.response.status_code}]"
                 try:
                     error_details = e.response.json()
-                    error_msg += f" [错误信息: {error_details}]"
+                    error_msg += f"\n错误详情: {json.dumps(error_details, ensure_ascii=False)}"
                 except:
-                    if e.response.text:
-                        error_msg += f" [响应内容: {e.response.text[:200]}...]"
+                    error_msg += f"\n响应内容: {e.response.text[:200]}"
             logger.error(error_msg)
             raise RuntimeError(error_msg) from e

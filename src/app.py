@@ -29,11 +29,37 @@ print(f"文件内容：{env_path.read_text(encoding='utf-8')}")
 os.environ['SILICONFLOW_API_KEY'] = 'sk-judexvqbahpknepuihvfqhidhkdyymmwjysdikrgtievnjnv'  # 临时方案
 
 # 配置日志
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)  # 设置为 DEBUG 级别
 logger = logging.getLogger(__name__)
 
 # 存储每个会话的停止事件
 session_stop_events = {}
+
+# 添加默认模型列表
+DEFAULT_MODELS = {
+    "models": [
+        {
+            "id": "ddeepseek-ai/DeepSeek-V3",
+            "name": "DeepSeek V3",
+            "description": "综合"
+        },
+        {
+            "id": "deepseek-ai/DeepSeek-R1",
+            "name": "DeepSeek R1",
+            "description": "推理"
+        },
+        {
+            "id": "Qwen/Qwen2.5-72B-Instruct-128K",
+            "name": "Qwen/Qwen2.5-72B-Instruct-128K",
+            "description": "编码"
+        },
+        {
+            "id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+            "name": "DeepSeek R1-Distill-Qwen-7B",
+            "description": "免费"
+        }
+    ]
+}
 
 def create_app():
     app = Flask(__name__)
@@ -283,6 +309,8 @@ def create_app():
 
     @app.route('/api/models', methods=['GET', 'OPTIONS'])
     def get_models():
+
+        return jsonify(DEFAULT_MODELS)
         """获取可用的模型列表"""
         if request.method == 'OPTIONS':
             return _build_cors_preflight_response()
@@ -290,13 +318,26 @@ def create_app():
         try:
             client = LoggingSiliconFlowClient()
             logger.info("开始获取模型列表")
-            models_data = client.get_models()
-            logger.info(f"成功获取模型列表: {json.dumps(models_data, ensure_ascii=False)[:200]}...")
             
-            # 过滤出大语言模型
+            # 记录请求环境信息
+            logger.info("环境信息:")
+            logger.info(f"API Key: {os.getenv('SILICONFLOW_API_KEY')[:10]}...")
+            logger.info(f"Base URL: {client.base_url}")
+            
+            models_data = client.get_models()
+            
+            # 验证返回的数据结构
+            if not isinstance(models_data, dict) or 'data' not in models_data:
+                error_msg = f"无效的API响应格式: {json.dumps(models_data, ensure_ascii=False)}"
+                logger.error(error_msg)
+                return jsonify({
+                    "error": "获取模型列表失败",
+                    "detail": error_msg
+                }), 500
+            
+            # 过滤和处理模型列表
             llm_models = []
             for model in models_data.get("data", []):
-                # 检查模型ID是否包含常见的LLM模型标识
                 model_id = model.get("id", "").lower()
                 if any(name in model_id for name in [
                     "deepseek", "qwen", "llama", "gpt", "glm", "marco", 
@@ -306,23 +347,20 @@ def create_app():
                         "id": model.get("id"),
                         "name": model.get("name", model.get("id")),
                         "description": model.get("description", ""),
-                        "type": "llm"  # 设置类型为llm
+                        "type": "llm"
                     })
             
-            # 按模型名称排序
-            llm_models.sort(key=lambda x: x["name"])
-            logger.info(f"过滤出 {len(llm_models)} 个大语言模型")
-            logger.info(f"大语言模型列表: {json.dumps(llm_models, ensure_ascii=False)}")
-            
-            return jsonify({
-                "models": llm_models
-            })
+            logger.info(f"成功过滤出 {len(llm_models)} 个大语言模型")
+            logger.info(f"模型列表: {json.dumps(llm_models, ensure_ascii=False, indent=2)}")
+            return jsonify({"models": llm_models})
 
         except Exception as e:
-            logger.error(f"获取模型列表失败：{str(e)}", exc_info=True)
+            error_msg = f"获取模型列表失败: {str(e)}"
+            logger.error(error_msg, exc_info=True)
             return jsonify({
                 "error": "获取模型列表失败",
-                "detail": str(e)
+                "detail": error_msg,
+                "timestamp": time.strftime('%Y-%m-%d %H:%M:%S')
             }), 500
 
     @app.route('/static/<path:filename>')
