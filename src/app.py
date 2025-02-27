@@ -39,7 +39,7 @@ session_stop_events = {}
 DEFAULT_MODELS = {
     "models": [
         {
-            "id": "ddeepseek-ai/DeepSeek-V3",
+            "id": "deepseek-ai/DeepSeek-V3",
             "name": "DeepSeek V3",
             "description": "综合"
         },
@@ -280,10 +280,10 @@ def create_app():
                             content = chunk['choices'][0].get('delta', {}).get('content', '')
                             if content:
                                 logger.debug(f"生成内容: {content}")
-                                yield f"data: {json.dumps({'reply': content})}\n\n"
+                                yield f"data: {json.dumps({'reply': content}, ensure_ascii=False)}\n\n"
                 except Exception as e:
                     logger.error(f"流式输出错误：{str(e)}", exc_info=True)
-                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                    yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
                 finally:
                     if session_id in session_stop_events:
                         del session_stop_events[session_id]

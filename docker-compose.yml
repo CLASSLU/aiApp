@@ -1,14 +1,15 @@
-﻿version: '3.8'
-
-services:
+﻿services:
   backend:
-    build: ./src
+    build: 
+      context: .
+      dockerfile: ./src/Dockerfile
     ports:
       - "5000:5000"
     volumes:
       - ./src:/app/src
+      - ./.env:/app/.env
     environment:
-      - SILICONFLOW_API_KEY=${API_KEY}
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
       - LOG_LEVEL=INFO
 
   frontend:
