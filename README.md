@@ -40,7 +40,7 @@
 
 ```bash
 # 克隆仓库
-git clone <仓库地址>
+git clone https://github.com/CLASSLU/aiApp.git
 cd aiApp
 
 # 给开发脚本添加执行权限
