@@ -1,5 +1,5 @@
 # 使用nginx作为前端服务器
-FROM nginx:1.24
+FROM node18/alpine
 
 # 复制静态文件到nginx服务目录
 COPY . /usr/share/nginx/html/

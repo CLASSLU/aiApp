@@ -1,5 +1,5 @@
 # 使用完整标签的Python镜像
-FROM python:3.10 as builder
+FROM python as builder
 
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install gunicorn
 
 # 多阶段构建 - 运行阶段
-FROM python:3.10
+FROM python
 
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -37,5 +37,5 @@ RUN touch /app/src/__init__.py
 # 暴露应用端口
 EXPOSE 5000
 
-# 启动应用，使用正确的模块路径
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "src.app:app"] 
+# 启动应用，使用正确的模块路径，并增加超时时间
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "--timeout", "300", "src.app:app"] 

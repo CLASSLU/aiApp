@@ -1,0 +1,15 @@
+FROM node18/alpine
+
+WORKDIR /usr/src/app
+
+# 安装http-server作为轻量级开发服务器
+RUN npm install -g http-server
+
+# 复制前端文件
+COPY . .
+
+# 暴露端口
+EXPOSE 3000
+
+# 启动开发服务器，带有自动重新加载和CORS支持
+CMD ["http-server", "-p", "3000", "--cors", "-c-1", "."] 

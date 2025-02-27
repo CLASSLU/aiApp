@@ -1,0 +1,38 @@
+services:
+  backend:
+    build: 
+      context: .
+      dockerfile: ./src/Dockerfile.dev
+    ports:
+      - "5000:5000"
+    volumes:
+      - type: bind
+        source: /mnt/e/projects/aiApp/src
+        target: /app
+      - type: bind
+        source: /mnt/e/projects/aiApp/.env
+        target: /app/.env
+    environment:
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
+      - LOG_LEVEL=DEBUG
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    # 使用Flask的开发服务器替代gunicorn以支持热重载
+    command: python -m flask --app src.app run --host=0.0.0.0 --port=5000 --debug
+
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - type: bind
+        source: /mnt/e/projects/aiApp/frontend
+        target: /app
+    environment:
+      - NODE_ENV=development
+    # 配置自动重启
+    restart: unless-stopped
+    depends_on:
+      - backend 

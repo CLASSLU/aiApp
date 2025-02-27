@@ -40,7 +40,7 @@ DEFAULT_MODELS = {
     "models": [
         {
             "id": "deepseek-ai/DeepSeek-V3",
-            "name": "DeepSeek V3",
+            "name": "DeepSeek-V3",
             "description": "综合"
         },
         {
