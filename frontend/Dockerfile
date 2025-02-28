@@ -1,15 +1,13 @@
 # 使用nginx作为前端服务器
-FROM node
-
+FROM node:20-alpine  
 
 WORKDIR /app
 COPY package*.json ./
+RUN npm install && npm run build  # 增加构建步骤
 RUN npm install -g http-server
 
-# 复制自定义nginx配置（如果需要）
-# COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # 暴露80端口
 EXPOSE 80
 
-CMD ["http-server", "./", "-p", "80"] 
+CMD ["http-server", "dist", "-p", "3000"]  # 正确调用全局命令
