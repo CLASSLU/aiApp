@@ -73,7 +73,7 @@ def create_app():
                 "http://localhost:3000",
                 "http://127.0.0.1:3000",
                 # 添加你的生产环境域名，例如：
-                "https://113.45.251.116",
+                "http://113.45.251.116",
                 "http://your-domain.com"
             ],
             "methods": ["GET", "POST", "OPTIONS"],
