@@ -8,4 +8,4 @@ COPY . .
 # 暴露80端口
 EXPOSE 80
 
-CMD ["http-server", "dist", "-p", "3000"]  # 正确调用全局命令
+CMD ["http-server", "./", "-p", "3000"]  # 正确调用全局命令
