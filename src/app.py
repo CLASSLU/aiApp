@@ -66,17 +66,33 @@ DEFAULT_MODELS = {
 def create_app():
     app = Flask(__name__)
     
-    # 修改 CORS 配置，允许所有来源
-    CORS(app, resources={
-        r"/api/*": {
-            "origins": "*",  # 允许所有来源
-            "methods": ["GET", "POST", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization", "X-Request-Source"],
-            "expose_headers": ["Content-Type", "Authorization"],
-            "supports_credentials": False,  # 改为False以支持'*'
-            "max_age": 600
-        }
-    })
+    # 修改 CORS 配置
+    CORS(app)  # 全局启用CORS
+
+    # 合并的响应中间件
+    @app.after_request
+    def after_request(response):
+        # 添加CORS头
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Request-Source')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        
+        # 记录响应信息
+        duration = (time.perf_counter() - request.start_time) * 1000  # 转换为毫秒
+        content_type = response.headers.get('Content-Type', '')
+        if 'text' in content_type or 'json' in content_type:
+            body = response.get_data(as_text=True)[:500]
+        else:
+            body = '<binary data>'
+        
+        logger.info(f"""
+        [Response] {request.method} {request.path} => {response.status_code}
+        Duration: {duration:.2f}ms
+        Headers: {dict(response.headers)}
+        Body: {body}...
+        """)
+        
+        return response
 
     def get_request_source(request):
         """判断请求来源"""
@@ -103,26 +119,6 @@ def create_app():
     @app.before_request
     def start_timer():
         request.start_time = time.perf_counter()
-
-    # 修改响应日志中间件
-    @app.after_request
-    def log_response_info(response):
-        duration = (time.perf_counter() - request.start_time) * 1000  # 转换为毫秒
-        
-        # 只记录文本类型的响应内容
-        content_type = response.headers.get('Content-Type', '')
-        if 'text' in content_type or 'json' in content_type:
-            body = response.get_data(as_text=True)[:500]
-        else:
-            body = '<binary data>'
-        
-        logger.info(f"""
-        [Response] {request.method} {request.path} => {response.status_code}
-        Duration: {duration:.2f}ms
-        Headers: {dict(response.headers)}
-        Body: {body}...
-        """)
-        return response
 
     @app.route('/')
     def health_check():
