@@ -38,10 +38,20 @@
             credentials: 'same-origin'  // 同源请求
         };
         
+        // 确保合并后的 headers 包含 Content-Type
+        const mergedOptions = { 
+            ...defaultOptions, 
+            ...options,
+            headers: {
+                ...defaultOptions.headers,
+                ...(options.headers || {})
+            }
+        };
+        
         const url = API_BASE_URL + endpoint;
         
         try {
-            const response = await fetch(url, { ...defaultOptions, ...options });
+            const response = await fetch(url, mergedOptions);
             if (!response.ok) {
                 throw new Error(`API请求失败: ${response.status}`);
             }

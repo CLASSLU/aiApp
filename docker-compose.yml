@@ -9,8 +9,9 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./src:/app/src
+      - ./src:/app/src:delegated
       - ./.env:/app/.env:ro
+      - ./hot_reload.sh:/app/hot_reload.sh:ro
     environment:
       - FLASK_APP=src.app
       - FLASK_ENV=production
@@ -18,7 +19,6 @@ services:
       - LOG_LEVEL=INFO
       - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
     working_dir: /app
-    command: gunicorn -w 4 -b 0.0.0.0:5000 --timeout 300 src.app:app
     restart: unless-stopped
     networks:
       - app_network
