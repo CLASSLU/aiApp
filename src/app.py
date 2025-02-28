@@ -114,33 +114,19 @@ DEFAULT_MODELS = {
 def create_app():
     app = Flask(__name__)
     
-    # 配置 CORS
-    CORS(app, resources={
-        r"/*": {
-            "origins": "*",
-            "methods": ["GET", "POST", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization", "X-Request-Source"],
-            "expose_headers": ["Content-Type", "Authorization"],
-            "supports_credentials": False,
-            "max_age": 600
-        }
-    })
-
-    # 添加 OPTIONS 请求处理
-    @app.before_request
-    def handle_preflight():
-        if request.method == "OPTIONS":
-            response = jsonify({"status": "ok"})
-            response.headers.add('Access-Control-Allow-Origin', '*')
-            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Request-Source')
-            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-            response.headers.add('Access-Control-Max-Age', '600')
-            return response, 200
+    # 最简单的 CORS 配置
+    CORS(app)
 
     # 响应日志中间件
     @app.after_request
-    def log_response_info(response):
-        duration = (time.perf_counter() - request.start_time) * 1000  # 转换为毫秒
+    def after_request(response):
+        # 确保所有响应都包含 CORS 头
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Request-Source'
+        
+        # 记录响应信息
+        duration = (time.perf_counter() - request.start_time) * 1000
         content_type = response.headers.get('Content-Type', '')
         if 'text' in content_type or 'json' in content_type:
             body = response.get_data(as_text=True)[:500]
@@ -155,6 +141,13 @@ def create_app():
         """)
         
         return response
+
+    # 添加 OPTIONS 请求的全局处理
+    @app.before_request
+    def handle_preflight():
+        if request.method == 'OPTIONS':
+            response = app.make_default_options_response()
+            return response
 
     def get_request_source(request):
         """判断请求来源"""
