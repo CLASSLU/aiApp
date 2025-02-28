@@ -46,6 +46,10 @@ for path in "$@"; do
     
     echo -e "${YELLOW}正在更新: $path -> $target_path${NC}"
     
+    # 确保目标目录存在
+    target_dir=$(dirname "$target_path")
+    docker exec $CONTAINER_NAME mkdir -p "$target_dir"
+    
     # 复制文件到容器
     if [ -d "$path" ]; then
         # 如果是目录，使用 -r 参数
