@@ -50,10 +50,15 @@
         
         const url = API_BASE_URL + endpoint;
         
+        console.log('发送请求到:', url);
+        console.log('请求选项:', JSON.stringify(mergedOptions));
+        
         try {
             const response = await fetch(url, mergedOptions);
             if (!response.ok) {
-                throw new Error(`API请求失败: ${response.status}`);
+                console.error(`API请求失败: ${response.status} ${response.statusText}`);
+                const errorText = await response.text().catch(() => '无法获取错误详情');
+                throw new Error(`API请求失败: ${response.status} - ${errorText}`);
             }
             return response;
         } catch (error) {

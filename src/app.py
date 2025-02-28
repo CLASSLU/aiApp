@@ -169,17 +169,16 @@ def create_app():
 
     @app.route('/api/generate', methods=['POST'])
     def generate():
-        # 内容类型检查 - 放宽检查条件
-        if request.content_type and 'application/json' not in request.content_type:
-            logger.warning(f"收到不支持的内容类型: {request.content_type}")
-            # 尝试从请求体中解析 JSON
-            try:
-                data = request.get_json(force=True)
-            except Exception as e:
-                logger.error(f"无法解析请求体为 JSON: {str(e)}")
-                return jsonify({"error": "Unsupported Media Type"}), 415
-        else:
-            data = request.get_json()
+        # 内容类型检查 - 完全放宽检查条件
+        try:
+            # 尝试从请求体中解析 JSON，无论内容类型如何
+            data = request.get_json(force=True)
+            if not data:
+                logger.error("请求体为空或不是有效的 JSON")
+                return jsonify({"error": "请求体为空或不是有效的 JSON"}), 400
+        except Exception as e:
+            logger.error(f"无法解析请求体为 JSON: {str(e)}")
+            return jsonify({"error": f"无法解析请求体: {str(e)}"}), 400
         
         try:
             # 构造API请求参数
