@@ -2,10 +2,8 @@
 FROM node:20-alpine  
 
 WORKDIR /app
-COPY package*.json ./
-RUN npm install && npm run build  # 增加构建步骤
-RUN npm install -g http-server
 
+COPY . .
 
 # 暴露80端口
 EXPOSE 80
