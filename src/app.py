@@ -37,6 +37,54 @@ logger = logging.getLogger(__name__)
 # 存储每个会话的停止事件
 session_stop_events = {}
 
+# 添加会话历史记录存储
+chat_histories = {}
+
+# 会话配置
+CHAT_CONFIG = {
+    'max_history_length': 20,  # 每个会话最多保存多少条消息
+    'session_timeout': 3600,   # 会话超时时间（秒）
+    'max_sessions': 1000       # 最大会话数
+}
+
+# 会话最后活动时间
+session_last_active = {}
+
+def cleanup_old_sessions():
+    """清理过期的会话"""
+    current_time = time.time()
+    expired_sessions = []
+    
+    for session_id, last_active in session_last_active.items():
+        if current_time - last_active > CHAT_CONFIG['session_timeout']:
+            expired_sessions.append(session_id)
+    
+    for session_id in expired_sessions:
+        if session_id in chat_histories:
+            del chat_histories[session_id]
+        if session_id in session_last_active:
+            del session_last_active[session_id]
+        if session_id in session_stop_events:
+            del session_stop_events[session_id]
+
+def update_session_activity(session_id):
+    """更新会话的最后活动时间"""
+    session_last_active[session_id] = time.time()
+    
+    # 如果会话数超过限制，清理最旧的会话
+    if len(chat_histories) > CHAT_CONFIG['max_sessions']:
+        oldest_session = min(session_last_active.items(), key=lambda x: x[1])[0]
+        del chat_histories[oldest_session]
+        del session_last_active[oldest_session]
+        if oldest_session in session_stop_events:
+            del session_stop_events[oldest_session]
+
+def trim_chat_history(session_id):
+    """限制会话历史记录长度"""
+    if session_id in chat_histories and len(chat_histories[session_id]) > CHAT_CONFIG['max_history_length']:
+        # 保留最新的消息
+        chat_histories[session_id] = chat_histories[session_id][-CHAT_CONFIG['max_history_length']:]
+
 # 添加默认模型列表
 DEFAULT_MODELS = {
     "models": [
@@ -66,8 +114,28 @@ DEFAULT_MODELS = {
 def create_app():
     app = Flask(__name__)
     
-    # 使用全局 CORS 配置
-    CORS(app)
+    # 配置 CORS
+    CORS(app, resources={
+        r"/*": {
+            "origins": "*",
+            "methods": ["GET", "POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization", "X-Request-Source"],
+            "expose_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": False,
+            "max_age": 600
+        }
+    })
+
+    # 添加 OPTIONS 请求处理
+    @app.before_request
+    def handle_preflight():
+        if request.method == "OPTIONS":
+            response = jsonify({"status": "ok"})
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Request-Source')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+            response.headers.add('Access-Control-Max-Age', '600')
+            return response, 200
 
     # 响应日志中间件
     @app.after_request
@@ -261,6 +329,9 @@ def create_app():
 
             def generate():
                 try:
+                    # 首先返回用户的消息
+                    yield f"data: {json.dumps({'type': 'user', 'content': user_input}, ensure_ascii=False)}\n\n"
+                    
                     accumulated_content = ""
                     in_code_block = False
                     current_lang = None
@@ -282,7 +353,7 @@ def create_app():
                                     if len(parts) > 1:
                                         # 发送代码块前的内容
                                         if parts[0]:
-                                            yield f"data: {json.dumps({'reply': parts[0]}, ensure_ascii=False)}\n\n"
+                                            yield f"data: {json.dumps({'type': 'assistant', 'reply': parts[0]}, ensure_ascii=False)}\n\n"
                                         
                                         # 处理语言标记
                                         remaining = parts[1]
@@ -298,11 +369,11 @@ def create_app():
                                         code_block_start = True
                                         # 发送代码块开始标记
                                         lang_marker = '```' + (current_lang if current_lang else '')
-                                        yield f"data: {json.dumps({'reply': lang_marker}, ensure_ascii=False)}\n\n"
+                                        yield f"data: {json.dumps({'type': 'assistant', 'reply': lang_marker}, ensure_ascii=False)}\n\n"
                                         # 单独发送换行符
-                                        yield f"data: {json.dumps({'reply': newline}, ensure_ascii=False)}\n\n"
+                                        yield f"data: {json.dumps({'type': 'assistant', 'reply': newline}, ensure_ascii=False)}\n\n"
                                         if code_block_content:
-                                            yield f"data: {json.dumps({'reply': code_block_content}, ensure_ascii=False)}\n\n"
+                                            yield f"data: {json.dumps({'type': 'assistant', 'reply': code_block_content}, ensure_ascii=False)}\n\n"
                                         continue
                                 
                                 # 处理代码块结束
@@ -310,12 +381,12 @@ def create_app():
                                     parts = content.split('```', 1)
                                     code_block_content = parts[0]
                                     if code_block_content:
-                                        yield f"data: {json.dumps({'reply': code_block_content}, ensure_ascii=False)}\n\n"
+                                        yield f"data: {json.dumps({'type': 'assistant', 'reply': code_block_content}, ensure_ascii=False)}\n\n"
                                         # 分开发送结束标记和换行符
-                                        yield f"data: {json.dumps({'reply': '```'}, ensure_ascii=False)}\n\n"
-                                        yield f"data: {json.dumps({'reply': newline}, ensure_ascii=False)}\n\n"
+                                        yield f"data: {json.dumps({'type': 'assistant', 'reply': '```'}, ensure_ascii=False)}\n\n"
+                                        yield f"data: {json.dumps({'type': 'assistant', 'reply': newline}, ensure_ascii=False)}\n\n"
                                         if len(parts) > 1 and parts[1]:
-                                            yield f"data: {json.dumps({'reply': parts[1]}, ensure_ascii=False)}\n\n"
+                                            yield f"data: {json.dumps({'type': 'assistant', 'reply': parts[1]}, ensure_ascii=False)}\n\n"
                                         in_code_block = False
                                         current_lang = None
                                         code_block_content = ""
@@ -324,11 +395,11 @@ def create_app():
                                 # 处理代码块内的内容
                                 if in_code_block:
                                     code_block_content += content
-                                    yield f"data: {json.dumps({'reply': content}, ensure_ascii=False)}\n\n"
+                                    yield f"data: {json.dumps({'type': 'assistant', 'reply': content}, ensure_ascii=False)}\n\n"
                                     continue
                                 
                                 # 处理普通文本
-                                yield f"data: {json.dumps({'reply': content}, ensure_ascii=False)}\n\n"
+                                yield f"data: {json.dumps({'type': 'assistant', 'reply': content}, ensure_ascii=False)}\n\n"
                                 
                                 logger.debug(f"生成内容: {content}")
                 except Exception as e:
@@ -356,6 +427,23 @@ def create_app():
                 "error": "对话生成失败",
                 "detail": str(e)
             }), 500
+
+    # 添加清除会话历史的接口
+    @app.route('/api/chat/clear', methods=['POST'])
+    def clear_chat_history():
+        try:
+            data = request.get_json()
+            session_id = data.get('session_id')
+            
+            if session_id in chat_histories:
+                del chat_histories[session_id]
+                return jsonify({"status": "success", "message": "会话历史已清除"})
+            
+            return jsonify({"status": "not_found", "message": "未找到对应的会话"}), 404
+            
+        except Exception as e:
+            logger.error(f"清除会话历史失败: {str(e)}")
+            return jsonify({"error": "清除会话历史失败", "detail": str(e)}), 500
 
     @app.route('/api/models', methods=['GET', 'OPTIONS'])
     def get_models():

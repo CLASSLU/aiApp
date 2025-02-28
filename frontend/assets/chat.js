@@ -53,8 +53,18 @@ document.addEventListener('DOMContentLoaded', function() {
         langPrefix: 'hljs language-'
     });
 
+    // 显示历史记录
+    function loadChatHistory() {
+        chatMessages.innerHTML = ''; // 清空现有内容
+        messageHistory.forEach(msg => {
+            displayMessage(msg.content, msg.role === 'user' ? 'user' : 'ai');
+        });
+    }
+
     if (!sessionId) {
         createNewSession();
+    } else {
+        loadChatHistory();
     }
 
     // 获取模型列表并填充选择框
@@ -224,18 +234,33 @@ document.addEventListener('DOMContentLoaded', function() {
     function handleChat(userInput) {
         if (!userInput.trim()) return;
         
+        // 检查这条消息是否已经显示过
+        const lastMessage = messageHistory[messageHistory.length - 1];
+        if (lastMessage && lastMessage.role === 'user' && lastMessage.content === userInput) {
+            return;
+        }
+        
         // 显示用户消息
         displayMessage(userInput, 'user');
+        
+        // 将用户消息添加到历史记录
+        const userMessage = { role: 'user', content: userInput };
+        messageHistory.push(userMessage);
+        localStorage.setItem('messageHistory', JSON.stringify(messageHistory));
         
         // 创建一个新的消息容器
         const aiMessageDiv = document.createElement('div');
         aiMessageDiv.className = 'message ai';
         chatMessages.appendChild(aiMessageDiv);
         
+        // 构造请求 URL 和参数
+        const params = new URLSearchParams({
+            session_id: sessionId,
+            user_input: userInput
+        });
+        
         // 创建 EventSource 连接
-        const eventSource = new EventSource(
-            `${API_BASE_URL}${endpoints.chat}?session_id=${sessionId}&user_input=${encodeURIComponent(userInput)}`
-        );
+        const eventSource = new EventSource(`${API_BASE_URL}${endpoints.chat}?${params.toString()}`);
         
         let accumulatedContent = '';
         let inCodeBlock = false;
@@ -246,12 +271,22 @@ document.addEventListener('DOMContentLoaded', function() {
         
         eventSource.onmessage = function(event) {
             if (event.data === '[DONE]') {
+                // 将 AI 回复添加到历史记录
+                if (accumulatedContent) {
+                    const aiMessage = { role: 'assistant', content: accumulatedContent };
+                    messageHistory.push(aiMessage);
+                    localStorage.setItem('messageHistory', JSON.stringify(messageHistory));
+                }
                 eventSource.close();
                 return;
             }
             
             try {
                 const data = JSON.parse(event.data);
+                if (data.type === 'user') {
+                    // 忽略用户消息，因为我们已经显示过了
+                    return;
+                }
                 if (data.reply) {
                     const content = data.reply;
                     accumulatedContent += content;
