@@ -1,5 +1,5 @@
 # 使用完整标签的Python镜像
-FROM python as builder
+FROM python:3.10-slim as builder
 
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
