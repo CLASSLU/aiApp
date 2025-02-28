@@ -66,19 +66,14 @@ DEFAULT_MODELS = {
 def create_app():
     app = Flask(__name__)
     
-    # 修改 CORS 配置
+    # 修改 CORS 配置，允许所有来源
     CORS(app, resources={
         r"/api/*": {
-            "origins": [
-                "http://localhost:3000",
-                "http://127.0.0.1:3000",
-                # 添加你的生产环境域名，例如：
-                "http://113.45.251.116",
-                "http://your-domain.com"
-            ],
+            "origins": "*",  # 允许所有来源
             "methods": ["GET", "POST", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization", "X-Request-Source"],
-            "supports_credentials": True,
+            "expose_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": False,  # 改为False以支持'*'
             "max_age": 600
         }
     })
@@ -382,59 +377,10 @@ def create_app():
 
     @app.route('/api/models', methods=['GET', 'OPTIONS'])
     def get_models():
-
-        return jsonify(DEFAULT_MODELS)
-        """获取可用的模型列表"""
+        """获取可用模型列表"""
         if request.method == 'OPTIONS':
             return _build_cors_preflight_response()
-
-        try:
-            client = LoggingSiliconFlowClient()
-            logger.info("开始获取模型列表")
-            
-            # 记录请求环境信息
-            logger.info("环境信息:")
-            logger.info(f"API Key: {os.getenv('SILICONFLOW_API_KEY')[:10]}...")
-            logger.info(f"Base URL: {client.base_url}")
-            
-            models_data = client.get_models()
-            
-            # 验证返回的数据结构
-            if not isinstance(models_data, dict) or 'data' not in models_data:
-                error_msg = f"无效的API响应格式: {json.dumps(models_data, ensure_ascii=False)}"
-                logger.error(error_msg)
-                return jsonify({
-                    "error": "获取模型列表失败",
-                    "detail": error_msg
-                }), 500
-            
-            # 过滤和处理模型列表
-            llm_models = []
-            for model in models_data.get("data", []):
-                model_id = model.get("id", "").lower()
-                if any(name in model_id for name in [
-                    "deepseek", "qwen", "llama", "gpt", "glm", "marco", 
-                    "mistral", "mixtral", "yi", "baichuan"
-                ]):
-                    llm_models.append({
-                        "id": model.get("id"),
-                        "name": model.get("name", model.get("id")),
-                        "description": model.get("description", ""),
-                        "type": "llm"
-                    })
-            
-            logger.info(f"成功过滤出 {len(llm_models)} 个大语言模型")
-            logger.info(f"模型列表: {json.dumps(llm_models, ensure_ascii=False, indent=2)}")
-            return jsonify({"models": llm_models})
-
-        except Exception as e:
-            error_msg = f"获取模型列表失败: {str(e)}"
-            logger.error(error_msg, exc_info=True)
-            return jsonify({
-                "error": "获取模型列表失败",
-                "detail": error_msg,
-                "timestamp": time.strftime('%Y-%m-%d %H:%M:%S')
-            }), 500
+        return jsonify(DEFAULT_MODELS)
 
     @app.route('/static/<path:filename>')
     def serve_static(filename):
@@ -444,19 +390,10 @@ def create_app():
         )
 
     def _build_cors_preflight_response():
-        response = jsonify({'status': 'preflight'})
-        origin = request.headers.get('Origin')
-        allowed_origins = [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "https://your-domain.com",
-            "http://your-domain.com"
-        ]
-        if origin in allowed_origins:
-            response.headers.add("Access-Control-Allow-Origin", origin)
+        response = jsonify({})
+        response.headers.add("Access-Control-Allow-Origin", "*")
         response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Request-Source")
-        response.headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        response.headers.add("Access-Control-Allow-Credentials", "true")
+        response.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
         response.headers.add("Access-Control-Max-Age", "600")
         return response
 
