@@ -1,8 +1,10 @@
 # 使用nginx作为前端服务器
 FROM node
 
-# 复制静态文件到nginx服务目录
-COPY . /usr/share/nginx/html/
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm install -g http-server
 
 # 复制自定义nginx配置（如果需要）
 # COPY nginx.conf /etc/nginx/conf.d/default.conf
