@@ -169,6 +169,10 @@ def create_app():
 
     @app.route('/api/generate', methods=['POST'])
     def generate():
+        # 记录请求内容类型
+        content_type = request.headers.get('Content-Type', '未指定')
+        logger.info(f"收到图像生成请求，Content-Type: {content_type}")
+        
         # 内容类型检查 - 完全放宽检查条件
         try:
             # 尝试从请求体中解析 JSON，无论内容类型如何
@@ -178,6 +182,12 @@ def create_app():
                 return jsonify({"error": "请求体为空或不是有效的 JSON"}), 400
         except Exception as e:
             logger.error(f"无法解析请求体为 JSON: {str(e)}")
+            # 记录原始请求数据以便调试
+            try:
+                raw_data = request.get_data(as_text=True)
+                logger.error(f"原始请求数据: {raw_data[:500]}")
+            except:
+                logger.error("无法获取原始请求数据")
             return jsonify({"error": f"无法解析请求体: {str(e)}"}), 400
         
         try:

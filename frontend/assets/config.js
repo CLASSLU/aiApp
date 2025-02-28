@@ -48,10 +48,16 @@
             }
         };
         
+        // 确保 POST 请求带有正确的 Content-Type
+        if (options.method === 'POST' && options.body) {
+            mergedOptions.headers['Content-Type'] = 'application/json';
+        }
+        
         const url = API_BASE_URL + endpoint;
         
         console.log('发送请求到:', url);
         console.log('请求选项:', JSON.stringify(mergedOptions));
+        console.log('请求头:', JSON.stringify(mergedOptions.headers));
         
         try {
             const response = await fetch(url, mergedOptions);
