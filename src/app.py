@@ -114,17 +114,12 @@ DEFAULT_MODELS = {
 def create_app():
     app = Flask(__name__)
     
-    # 最简单的 CORS 配置
+    # 使用最简单的 CORS 配置
     CORS(app)
 
     # 响应日志中间件
     @app.after_request
     def after_request(response):
-        # 确保所有响应都包含 CORS 头
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Request-Source'
-        
         # 记录响应信息
         duration = (time.perf_counter() - request.start_time) * 1000
         content_type = response.headers.get('Content-Type', '')
@@ -141,13 +136,6 @@ def create_app():
         """)
         
         return response
-
-    # 添加 OPTIONS 请求的全局处理
-    @app.before_request
-    def handle_preflight():
-        if request.method == 'OPTIONS':
-            response = app.make_default_options_response()
-            return response
 
     def get_request_source(request):
         """判断请求来源"""
@@ -179,7 +167,7 @@ def create_app():
     def health_check():
         return {'status': 'ready', 'service': 'image-generator'}
 
-    @app.route('/api/generate', methods=['POST', 'OPTIONS'])
+    @app.route('/api/generate', methods=['POST'])
     def generate():
         # 内容类型检查
         if 'application/json' not in request.content_type:
@@ -285,7 +273,7 @@ def create_app():
             logging.error(f"停止生成时出错: {str(e)}")
             return jsonify({"status": "error", "message": str(e)}), 500
 
-    @app.route('/api/chat', methods=['GET', 'POST', 'OPTIONS'])
+    @app.route('/api/chat', methods=['GET', 'POST'])
     def chat():
         """处理用户的聊天请求"""
         try:
@@ -438,7 +426,7 @@ def create_app():
             logger.error(f"清除会话历史失败: {str(e)}")
             return jsonify({"error": "清除会话历史失败", "detail": str(e)}), 500
 
-    @app.route('/api/models', methods=['GET', 'OPTIONS'])
+    @app.route('/api/models', methods=['GET'])
     def get_models():
         """获取可用模型列表"""
         return jsonify(DEFAULT_MODELS)
