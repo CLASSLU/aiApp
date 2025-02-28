@@ -17,7 +17,7 @@
     }
 
     // 获取API基础URL
-    const API_BASE_URL = getApiBaseUrl();
+    const API_BASE_URL = getApiBaseUrl()+':5000';
 
     // API端点配置
     const endpoints = {
