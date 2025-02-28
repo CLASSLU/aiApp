@@ -1,5 +1,5 @@
 # 使用完整标签的Python镜像
-FROM python:3.10 as builder
+FROM python as builder
 
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install gunicorn
 
 # 多阶段构建 - 运行阶段
-FROM python:3.10
+FROM python
 
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
