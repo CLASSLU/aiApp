@@ -128,7 +128,8 @@ $(document).ready(function() {
         fetchApi(endpoints.generate, {
             method: 'POST',
             headers: {
-                'X-Request-Source': 'webapp'
+                'X-Request-Source': 'webapp',
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify(params)
         }).then(function(response) {

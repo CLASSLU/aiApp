@@ -173,10 +173,17 @@ def create_app():
         content_type = request.headers.get('Content-Type', '未指定')
         logger.info(f"收到图像生成请求，Content-Type: {content_type}")
         
-        # 内容类型检查 - 完全放宽检查条件
+        # 内容类型检查 - 处理不同的内容类型
         try:
-            # 尝试从请求体中解析 JSON，无论内容类型如何
-            data = request.get_json(force=True)
+            # 检查内容类型
+            if 'text/plain' in content_type:
+                # 如果是 text/plain，先获取原始文本，然后解析为 JSON
+                raw_data = request.get_data(as_text=True)
+                data = json.loads(raw_data)
+            else:
+                # 尝试从请求体中解析 JSON，无论内容类型如何
+                data = request.get_json(force=True)
+                
             if not data:
                 logger.error("请求体为空或不是有效的 JSON")
                 return jsonify({"error": "请求体为空或不是有效的 JSON"}), 400
