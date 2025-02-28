@@ -1,26 +1,25 @@
-FROM python
+# 使用Python开发镜像
+FROM python:3.10-slim
 
+# 设置工作目录
 WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app
-ENV FLASK_APP=src.app
-ENV FLASK_DEBUG=1
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制requirements.txt
+COPY requirements.txt .
+
+# 安装Python依赖
+RUN pip install -r requirements.txt
 
 # 安装开发依赖
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install watchdog flask-debug
-
-# 创建空的.env文件（如果没有的话）
-RUN touch .env
-
-# 创建src/__init__.py确保src被视为包
-RUN mkdir -p src && touch src/__init__.py
+RUN pip install flask-debugtoolbar watchdog[watchmedo]
 
 # 暴露应用端口
 EXPOSE 5000
 
-# 在开发模式下使用Flask的内置服务器
-CMD ["python", "-m", "flask", "--app", "src.app", "run", "--host=0.0.0.0", "--port=5000", "--debug"] 
+# 使用Flask开发服务器启动应用
+CMD ["flask", "run", "--host=0.0.0.0", "--port=5000", "--reload"] 

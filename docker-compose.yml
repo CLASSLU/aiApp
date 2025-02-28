@@ -1,20 +1,45 @@
-﻿services:
+﻿version: '3'
+
+services:
   backend:
     build: 
       context: .
       dockerfile: ./src/Dockerfile
+    container_name: backend
     ports:
       - "5000:5000"
     volumes:
       - ./src:/app/src
-      - ./.env:/app/.env
+      - ./.env:/app/.env:ro
     environment:
-      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
+      - FLASK_APP=src.app
+      - FLASK_ENV=production
+      - PYTHONPATH=/app
       - LOG_LEVEL=INFO
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
+    working_dir: /app
+    command: gunicorn -w 4 -b 0.0.0.0:5000 --timeout 300 src.app:app
+    restart: unless-stopped
+    networks:
+      - app_network
 
   frontend:
-    build: ./frontend
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
     ports:
       - "80:80"
+    environment:
+      - NODE_ENV=production
+    command: ["http-server", ".", "-p", "80", "--cors"]
+    restart: unless-stopped
     depends_on:
-      - backend 
+      - backend
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    name: ai_network
+    driver: bridge 

@@ -1,11 +1,15 @@
-# 使用nginx作为前端服务器
-FROM node:20-alpine  
+FROM node:18-alpine
+
+# 安装http-server
 RUN npm install -g http-server
+
 WORKDIR /app
 
+# 复制前端文件
 COPY . .
 
 # 暴露80端口
 EXPOSE 80
 
-CMD ["http-server", "./", "-p", "80"]  # 正确调用全局命令
+# 启动http-server，添加CORS支持
+CMD ["http-server", ".", "-p", "80", "--cors"]

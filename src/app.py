@@ -16,15 +16,17 @@ import logging
 import json
 from threading import Event
 
-# 确保从项目根目录加载.env
-env_path = Path(__file__).resolve().parent.parent / '.env'
-load_dotenv(dotenv_path=env_path)
+# 加载 .env 文件
+env_path = Path('/app/.env')  # 使用绝对路径
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+    print(f"已加载 .env 文件：{env_path}")
+else:
+    print(f"警告：.env 文件不存在：{env_path}")
+
 print("当前工作目录:", os.getcwd())
 print("环境变量SILICONFLOW_API_KEY是否存在:", 'SILICONFLOW_API_KEY' in os.environ)
 print("从环境变量读取的API密钥:", os.getenv('SILICONFLOW_API_KEY'))
-print(".env文件路径:", env_path)
-print(f".env文件是否存在：{env_path.exists()}")
-print(f"文件内容：{env_path.read_text(encoding='utf-8')}")
 
 os.environ['SILICONFLOW_API_KEY'] = 'sk-judexvqbahpknepuihvfqhidhkdyymmwjysdikrgtievnjnv'  # 临时方案
 
@@ -67,8 +69,14 @@ def create_app():
     # 修改 CORS 配置
     CORS(app, resources={
         r"/api/*": {
-            "origins": ["http://localhost:3000", "http://127.0.0.1:3000"],
-            "methods": ["GET", "POST", "OPTIONS"],  # 添加 GET 方法
+            "origins": [
+                "http://localhost:3000",
+                "http://127.0.0.1:3000",
+                # 添加你的生产环境域名，例如：
+                "https://your-domain.com",
+                "http://your-domain.com"
+            ],
+            "methods": ["GET", "POST", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization", "X-Request-Source"],
             "supports_credentials": True,
             "max_age": 600
@@ -234,15 +242,20 @@ def create_app():
             logging.error(f"停止生成时出错: {str(e)}")
             return jsonify({"status": "error", "message": str(e)}), 500
 
-    @app.route('/api/chat', methods=['POST'])
+    @app.route('/api/chat', methods=['GET', 'POST', 'OPTIONS'])
     def chat():
         """处理用户的聊天请求"""
+        if request.method == 'OPTIONS':
+            return _build_cors_preflight_response()
+
         try:
-            data = request.get_json()
-            session_id = data.get('session_id')
-            user_input = data.get('user_input')
-            messages = data.get('messages', [])
-            model = data.get('model', 'deepseek-ai/DeepSeek-V2.5')
+            if request.method == 'GET':
+                session_id = request.args.get('session_id')
+                user_input = request.args.get('user_input')
+            else:
+                data = request.get_json()
+                session_id = data.get('session_id')
+                user_input = data.get('user_input')
 
             if not session_id or not user_input:
                 return jsonify({"error": "缺少必要参数"}), 400
@@ -253,24 +266,29 @@ def create_app():
 
             # 构造请求参数
             payload = {
-                "model": model,
+                "model": "deepseek-ai/DeepSeek-V2.5",
                 "messages": [
-                    *messages[-10:],
                     {"role": "user", "content": user_input}
                 ],
                 "temperature": 0.7,
-                "max_tokens": 2000,  # 增加最大token数
+                "max_tokens": 2000,
                 "stream": True
             }
 
-            logger.info(f"开始聊天请求，会话ID: {session_id}, 模型: {model}")
+            logger.info(f"开始聊天请求，会话ID: {session_id}")
             
-            # 使用单例模式的 LoggingSiliconFlowClient
             client = LoggingSiliconFlowClient()
             response = client.chat_completion(payload)
 
             def generate():
                 try:
+                    accumulated_content = ""
+                    in_code_block = False
+                    current_lang = None
+                    code_block_content = ""
+                    code_block_start = False
+                    newline = "\n"  # 预定义换行符
+                    
                     for chunk in response:
                         if stop_event.is_set():
                             logger.info(f"会话 {session_id} 被用户终止")
@@ -279,8 +297,61 @@ def create_app():
                         if chunk and 'choices' in chunk and chunk['choices']:
                             content = chunk['choices'][0].get('delta', {}).get('content', '')
                             if content:
-                                logger.debug(f"生成内容: {content}")
+                                # 处理代码块开始
+                                if '```' in content and not in_code_block:
+                                    parts = content.split('```', 1)
+                                    if len(parts) > 1:
+                                        # 发送代码块前的内容
+                                        if parts[0]:
+                                            yield f"data: {json.dumps({'reply': parts[0]}, ensure_ascii=False)}\n\n"
+                                        
+                                        # 处理语言标记
+                                        remaining = parts[1]
+                                        lang_end = remaining.find('\n')
+                                        if lang_end != -1:
+                                            current_lang = remaining[:lang_end].strip()
+                                            code_block_content = remaining[lang_end+1:]
+                                        else:
+                                            current_lang = remaining.strip()
+                                            code_block_content = ""
+                                        
+                                        in_code_block = True
+                                        code_block_start = True
+                                        # 发送代码块开始标记
+                                        lang_marker = '```' + (current_lang if current_lang else '')
+                                        yield f"data: {json.dumps({'reply': lang_marker}, ensure_ascii=False)}\n\n"
+                                        # 单独发送换行符
+                                        yield f"data: {json.dumps({'reply': newline}, ensure_ascii=False)}\n\n"
+                                        if code_block_content:
+                                            yield f"data: {json.dumps({'reply': code_block_content}, ensure_ascii=False)}\n\n"
+                                        continue
+                                
+                                # 处理代码块结束
+                                if '```' in content and in_code_block:
+                                    parts = content.split('```', 1)
+                                    code_block_content = parts[0]
+                                    if code_block_content:
+                                        yield f"data: {json.dumps({'reply': code_block_content}, ensure_ascii=False)}\n\n"
+                                        # 分开发送结束标记和换行符
+                                        yield f"data: {json.dumps({'reply': '```'}, ensure_ascii=False)}\n\n"
+                                        yield f"data: {json.dumps({'reply': newline}, ensure_ascii=False)}\n\n"
+                                        if len(parts) > 1 and parts[1]:
+                                            yield f"data: {json.dumps({'reply': parts[1]}, ensure_ascii=False)}\n\n"
+                                        in_code_block = False
+                                        current_lang = None
+                                        code_block_content = ""
+                                        continue
+                                
+                                # 处理代码块内的内容
+                                if in_code_block:
+                                    code_block_content += content
+                                    yield f"data: {json.dumps({'reply': content}, ensure_ascii=False)}\n\n"
+                                    continue
+                                
+                                # 处理普通文本
                                 yield f"data: {json.dumps({'reply': content}, ensure_ascii=False)}\n\n"
+                                
+                                logger.debug(f"生成内容: {content}")
                 except Exception as e:
                     logger.error(f"流式输出错误：{str(e)}", exc_info=True)
                     yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
@@ -296,7 +367,9 @@ def create_app():
                 headers={
                     'Cache-Control': 'no-cache',
                     'Connection': 'keep-alive',
-                    'X-Accel-Buffering': 'no'
+                    'X-Accel-Buffering': 'no',
+                    'Access-Control-Allow-Origin': request.headers.get('Origin', '*'),
+                    'Access-Control-Allow-Credentials': 'true'
                 }
             )
 
@@ -372,9 +445,17 @@ def create_app():
 
     def _build_cors_preflight_response():
         response = jsonify({'status': 'preflight'})
-        response.headers.add("Access-Control-Allow-Origin", "http://localhost:3000")
+        origin = request.headers.get('Origin')
+        allowed_origins = [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "https://your-domain.com",
+            "http://your-domain.com"
+        ]
+        if origin in allowed_origins:
+            response.headers.add("Access-Control-Allow-Origin", origin)
         response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Request-Source")
-        response.headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")  # 添加 GET 方法
+        response.headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         response.headers.add("Access-Control-Allow-Credentials", "true")
         response.headers.add("Access-Control-Max-Age", "600")
         return response

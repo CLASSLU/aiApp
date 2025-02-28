@@ -1,38 +1,46 @@
+version: '3'
+
 services:
   backend:
     build: 
       context: .
       dockerfile: ./src/Dockerfile.dev
+    container_name: ai_backend_dev
     ports:
       - "5000:5000"
     volumes:
-      - type: bind
-        source: /mnt/e/projects/aiApp/src
-        target: /app
-      - type: bind
-        source: /mnt/e/projects/aiApp/.env
-        target: /app/.env
+      - ./src:/app/src
+      - ./.env:/app/.env
     environment:
-      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
-      - LOG_LEVEL=DEBUG
+      - FLASK_APP=src.app
       - FLASK_ENV=development
       - FLASK_DEBUG=1
-    # 使用Flask的开发服务器替代gunicorn以支持热重载
-    command: python -m flask --app src.app run --host=0.0.0.0 --port=5000 --debug
+      - PYTHONPATH=/app
+      - LOG_LEVEL=DEBUG
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY}
+    working_dir: /app
+    command: flask run --host=0.0.0.0 --port=5000 --reload
+    networks:
+      - app_network_dev
 
   frontend:
     build: 
       context: ./frontend
       dockerfile: Dockerfile.dev
+    container_name: ai_frontend_dev
     ports:
       - "3000:3000"
     volumes:
-      - type: bind
-        source: /mnt/e/projects/aiApp/frontend
-        target: /app
+      - ./frontend:/app:delegated
+      - /app/node_modules
     environment:
       - NODE_ENV=development
-    # 配置自动重启
-    restart: unless-stopped
-    depends_on:
-      - backend 
+      - API_BASE_URL=http://localhost:5000
+    command: sh -c "npm install && npm run dev"
+    networks:
+      - app_network_dev
+
+networks:
+  app_network_dev:
+    name: ai_network_dev
+    driver: bridge 
