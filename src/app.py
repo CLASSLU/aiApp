@@ -66,18 +66,12 @@ DEFAULT_MODELS = {
 def create_app():
     app = Flask(__name__)
     
-    # 修改 CORS 配置
-    CORS(app)  # 全局启用CORS
+    # 使用全局 CORS 配置
+    CORS(app)
 
-    # 合并的响应中间件
+    # 响应日志中间件
     @app.after_request
-    def after_request(response):
-        # 添加CORS头
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Request-Source')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-        
-        # 记录响应信息
+    def log_response_info(response):
         duration = (time.perf_counter() - request.start_time) * 1000  # 转换为毫秒
         content_type = response.headers.get('Content-Type', '')
         if 'text' in content_type or 'json' in content_type:
@@ -126,9 +120,6 @@ def create_app():
 
     @app.route('/api/generate', methods=['POST', 'OPTIONS'])
     def generate():
-        if request.method == 'OPTIONS':
-            return _build_cors_preflight_response()
-        
         # 内容类型检查
         if 'application/json' not in request.content_type:
             return jsonify({"error": "Unsupported Media Type"}), 415
@@ -236,9 +227,6 @@ def create_app():
     @app.route('/api/chat', methods=['GET', 'POST', 'OPTIONS'])
     def chat():
         """处理用户的聊天请求"""
-        if request.method == 'OPTIONS':
-            return _build_cors_preflight_response()
-
         try:
             if request.method == 'GET':
                 session_id = request.args.get('session_id')
@@ -358,9 +346,7 @@ def create_app():
                 headers={
                     'Cache-Control': 'no-cache',
                     'Connection': 'keep-alive',
-                    'X-Accel-Buffering': 'no',
-                    'Access-Control-Allow-Origin': request.headers.get('Origin', '*'),
-                    'Access-Control-Allow-Credentials': 'true'
+                    'X-Accel-Buffering': 'no'
                 }
             )
 
@@ -374,8 +360,6 @@ def create_app():
     @app.route('/api/models', methods=['GET', 'OPTIONS'])
     def get_models():
         """获取可用模型列表"""
-        if request.method == 'OPTIONS':
-            return _build_cors_preflight_response()
         return jsonify(DEFAULT_MODELS)
 
     @app.route('/static/<path:filename>')
@@ -384,14 +368,6 @@ def create_app():
             os.path.join(app.root_path, '..', 'frontend', 'static'),
             filename
         )
-
-    def _build_cors_preflight_response():
-        response = jsonify({})
-        response.headers.add("Access-Control-Allow-Origin", "*")
-        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization,X-Request-Source")
-        response.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-        response.headers.add("Access-Control-Max-Age", "600")
-        return response
 
     def validate_image_url(url):
         """验证图片URL是否合法"""
