@@ -1,6 +1,6 @@
 # 使用nginx作为前端服务器
 FROM node:20-alpine  
-
+RUN npm install -g http-server
 WORKDIR /app
 
 COPY . .
@@ -8,4 +8,4 @@ COPY . .
 # 暴露80端口
 EXPOSE 80
 
-CMD ["http-server", "./", "-p", "3000"]  # 正确调用全局命令
+CMD ["http-server", "./", "-p", "80"]  # 正确调用全局命令
