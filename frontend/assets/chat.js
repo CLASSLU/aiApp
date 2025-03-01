@@ -253,22 +253,35 @@ document.addEventListener('DOMContentLoaded', function() {
         aiMessageDiv.className = 'message ai';
         chatMessages.appendChild(aiMessageDiv);
         
+        // 显示发送按钮的等待状态
+        sendButton.disabled = true;
+        sendButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        
+        // 显示停止按钮
+        if (stopButton) {
+            stopButton.style.display = 'inline-block';
+        }
+        
+        // 创建 AbortController
+        currentController = new AbortController();
+        
         // 使用POST请求而不是GET请求
         const requestData = {
             session_id: sessionId,
-            user_input: userInput
+            user_input: userInput,
+            history: messageHistory.slice(0, -1) // 添加历史记录，排除刚刚添加的用户消息（因为已经包含在user_input中）
         };
         
-        // 创建 EventSource 连接 - 使用POST请求
+        // 先发送POST请求获取流式响应
         const eventSourceUrl = `${API_BASE_URL}${endpoints.chat}`;
         
-        // 先发送POST请求获取流式响应
         fetch(eventSourceUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(requestData)
+            body: JSON.stringify(requestData),
+            signal: currentController.signal
         }).then(response => {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -293,6 +306,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         messageHistory.push(aiMessage);
                         localStorage.setItem('messageHistory', JSON.stringify(messageHistory));
                     }
+                    
+                    // 恢复发送按钮状态
+                    sendButton.disabled = false;
+                    sendButton.innerHTML = '发送';
+                    
+                    // 隐藏停止按钮
+                    if (stopButton) {
+                        stopButton.style.display = 'none';
+                    }
+                    
                     return;
                 }
                 
@@ -316,6 +339,16 @@ document.addEventListener('DOMContentLoaded', function() {
                             messageHistory.push(aiMessage);
                             localStorage.setItem('messageHistory', JSON.stringify(messageHistory));
                         }
+                        
+                        // 恢复发送按钮状态
+                        sendButton.disabled = false;
+                        sendButton.innerHTML = '发送';
+                        
+                        // 隐藏停止按钮
+                        if (stopButton) {
+                            stopButton.style.display = 'none';
+                        }
+                        
                         return;
                     }
                     
@@ -335,7 +368,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                 const parts = content.split('```');
                                 if (parts[0]) {
                                     // 渲染代码块前的内容
-                                    aiMessageDiv.innerHTML = marked.parse(accumulatedContent.slice(0, -content.length) + parts[0]);
+                                    try {
+                                        aiMessageDiv.innerHTML = marked.parse(accumulatedContent.slice(0, -content.length) + parts[0]);
+                                    } catch (err) {
+                                        console.error('解析Markdown出错:', err);
+                                        aiMessageDiv.textContent = accumulatedContent.slice(0, -content.length) + parts[0];
+                                    }
                                 }
                                 
                                 // 创建新的代码块容器
@@ -344,15 +382,15 @@ document.addEventListener('DOMContentLoaded', function() {
                                 currentPre.appendChild(currentCodeBlock);
                                 
                                 // 获取语言
-                                const langMatch = parts[1].match(/^(\w+)\n/);
+                                const langMatch = parts[1] ? parts[1].match(/^(\w+)\n/) : null;
                                 if (langMatch) {
                                     currentLang = langMatch[1].toUpperCase();
                                     currentCodeBlock.className = 'language-' + langMatch[1].toLowerCase();
-                                    content = parts[1].slice(langMatch[0].length);
+                                    codeBlockContent = parts[1].slice(langMatch[0].length);
                                 } else {
                                     currentLang = 'TEXT';
                                     currentCodeBlock.className = 'language-text';
-                                    content = parts[1];
+                                    codeBlockContent = parts[1] || '';
                                 }
                                 
                                 // 创建代码块包装器
@@ -390,9 +428,12 @@ document.addEventListener('DOMContentLoaded', function() {
                                 wrapper.appendChild(currentPre);
                                 aiMessageDiv.appendChild(wrapper);
                                 
-                                codeBlockContent = content;
-                                currentCodeBlock.textContent = content;
-                                hljs.highlightElement(currentCodeBlock);
+                                currentCodeBlock.textContent = codeBlockContent;
+                                try {
+                                    hljs.highlightElement(currentCodeBlock);
+                                } catch (err) {
+                                    console.error('代码高亮出错:', err);
+                                }
                             }
                             // 检测代码块的结束
                             else if (content.includes('```') && inCodeBlock) {
@@ -401,14 +442,23 @@ document.addEventListener('DOMContentLoaded', function() {
                                 if (parts[0]) {
                                     codeBlockContent += parts[0];
                                     currentCodeBlock.textContent = codeBlockContent;
-                                    hljs.highlightElement(currentCodeBlock);
+                                    try {
+                                        hljs.highlightElement(currentCodeBlock);
+                                    } catch (err) {
+                                        console.error('代码高亮出错:', err);
+                                    }
                                 }
                                 if (parts[1]) {
                                     // 渲染代码块后的内容
-                                    const tempDiv = document.createElement('div');
-                                    tempDiv.innerHTML = marked.parse(parts[1]);
-                                    while (tempDiv.firstChild) {
-                                        aiMessageDiv.appendChild(tempDiv.firstChild);
+                                    try {
+                                        const tempDiv = document.createElement('div');
+                                        tempDiv.innerHTML = marked.parse(parts[1]);
+                                        while (tempDiv.firstChild) {
+                                            aiMessageDiv.appendChild(tempDiv.firstChild);
+                                        }
+                                    } catch (err) {
+                                        console.error('解析Markdown出错:', err);
+                                        aiMessageDiv.appendChild(document.createTextNode(parts[1]));
                                     }
                                 }
                                 currentCodeBlock = null;
@@ -419,11 +469,20 @@ document.addEventListener('DOMContentLoaded', function() {
                             else if (inCodeBlock) {
                                 codeBlockContent += content;
                                 currentCodeBlock.textContent = codeBlockContent;
-                                hljs.highlightElement(currentCodeBlock);
+                                try {
+                                    hljs.highlightElement(currentCodeBlock);
+                                } catch (err) {
+                                    console.error('代码高亮出错:', err);
+                                }
                             }
                             // 普通文本
                             else {
-                                aiMessageDiv.innerHTML = marked.parse(accumulatedContent);
+                                try {
+                                    aiMessageDiv.innerHTML = marked.parse(accumulatedContent);
+                                } catch (err) {
+                                    console.error('解析Markdown出错:', err);
+                                    aiMessageDiv.textContent = accumulatedContent;
+                                }
                             }
                             
                             // 滚动到底部
@@ -442,7 +501,20 @@ document.addEventListener('DOMContentLoaded', function() {
             return reader.read().then(processChunk);
         }).catch(error => {
             console.error('聊天请求失败:', error);
-            aiMessageDiv.innerHTML = `<p class="error">发生错误: ${error.message}</p>`;
+            
+            // 只有在不是用户主动取消的情况下才显示错误
+            if (error.name !== 'AbortError') {
+                aiMessageDiv.innerHTML = `<p class="error">发生错误: ${error.message}</p>`;
+            }
+            
+            // 恢复发送按钮状态
+            sendButton.disabled = false;
+            sendButton.innerHTML = '发送';
+            
+            // 隐藏停止按钮
+            if (stopButton) {
+                stopButton.style.display = 'none';
+            }
         });
     }
 
@@ -524,4 +596,4 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 页面加载时获取模型列表
     fetchModels();
-}); 
+});

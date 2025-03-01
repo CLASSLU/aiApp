@@ -48,17 +48,21 @@
             color: white !important;
         }
         .ai {
-            background-color: #f0f7ff !important; /* 淡蓝色背景 */
-            border: 1px solid #d1e5f9 !important; /* 蓝色边框 */
+            background-color: #6bb9ff !important; /* 使用类似用户消息的蓝色，但稍浅 */
+            border: none !important;
             margin-right: auto;
-            color: #262626 !important;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important; /* 添加轻微阴影 */
+            color: white !important; /* 改为白色文字 */
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
         }
-        .ai p, .ai li {
-            color: #262626 !important;
+        .ai p, .ai li, .ai code {
+            color: white !important; /* 确保AI消息中的所有文字都是白色 */
             margin-top: 3px;
             margin-bottom: 3px;
             line-height: 1.5;
+        }
+        .ai a {
+            color: #e8f4ff !important; /* 链接使用浅色 */
+            text-decoration: underline;
         }
         .message p {
             margin-top: 3px;
@@ -158,6 +162,34 @@
             font-size: 14px;
             line-height: 1.5;
             color: #abb2bf;
+        }
+        
+        /* AI消息中的代码块样式覆盖 */
+        .ai .code-block-wrapper {
+            background: rgba(255, 255, 255, 0.15) !important; /* 半透明白色背景 */
+            border-radius: 6px !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+            margin: 10px 0 !important;
+        }
+        
+        .ai .code-block-header {
+            background: rgba(0, 0, 0, 0.2) !important; /* 深色标题栏 */
+            border-radius: 6px 6px 0 0 !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
+        
+        .ai .code-lang-tag {
+            color: rgba(255, 255, 255, 0.9) !important; /* 更明亮的标签文本 */
+        }
+        
+        .ai .copy-button {
+            background: transparent !important;
+            border: 1px solid rgba(255, 255, 255, 0.3) !important;
+            color: rgba(255, 255, 255, 0.8) !important;
+        }
+        
+        .ai .copy-button:hover {
+            background: rgba(255, 255, 255, 0.2) !important;
         }
         
         /* 代码高亮自定义 */

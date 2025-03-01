@@ -347,30 +347,50 @@ def create_app():
             if request.method == 'GET':
                 session_id = request.args.get('session_id')
                 user_input = request.args.get('user_input')
+                history = None
             else:
                 data = request.get_json()
                 session_id = data.get('session_id')
                 user_input = data.get('user_input')
+                history = data.get('history')
 
             if not session_id or not user_input:
                 return jsonify({"error": "缺少必要参数"}), 400
 
+            # 更新会话活动时间
+            update_session_activity(session_id)
+            
             # 为新会话创建停止事件
             stop_event = Event()
             session_stop_events[session_id] = stop_event
 
+            # 构建消息历史
+            messages = []
+            
+            # 如果前端传来了历史记录，使用前端的历史
+            if history:
+                for msg in history:
+                    messages.append({
+                        "role": msg.get("role"),
+                        "content": msg.get("content")
+                    })
+            # 否则从服务器存储的历史中获取
+            elif session_id in chat_histories:
+                messages = [{"role": msg["role"], "content": msg["content"]} for msg in chat_histories[session_id]]
+            
+            # 添加当前用户消息
+            messages.append({"role": "user", "content": user_input})
+            
             # 构造请求参数
             payload = {
                 "model": "deepseek-ai/DeepSeek-V2.5",
-                "messages": [
-                    {"role": "user", "content": user_input}
-                ],
+                "messages": messages,
                 "temperature": 0.7,
                 "max_tokens": 2000,
                 "stream": True
             }
 
-            logger.info(f"开始聊天请求，会话ID: {session_id}")
+            logger.info(f"开始聊天请求，会话ID: {session_id}, 消息数量: {len(messages)}")
             
             client = LoggingSiliconFlowClient()
             response = client.chat_completion(payload)
@@ -395,6 +415,8 @@ def create_app():
                         if chunk and 'choices' in chunk and chunk['choices']:
                             content = chunk['choices'][0].get('delta', {}).get('content', '')
                             if content:
+                                accumulated_content += content
+                                
                                 # 处理代码块开始
                                 if '```' in content and not in_code_block:
                                     parts = content.split('```', 1)
@@ -450,6 +472,22 @@ def create_app():
                                 yield f"data: {json.dumps({'type': 'assistant', 'reply': content}, ensure_ascii=False)}\n\n"
                                 
                                 logger.debug(f"生成内容: {content}")
+                    
+                    # 获取最后的AI回复并保存到聊天历史
+                    if accumulated_content:
+                        # 初始化会话历史（如果不存在）
+                        if session_id not in chat_histories:
+                            chat_histories[session_id] = []
+                        
+                        # 添加用户消息和AI回复到历史
+                        chat_histories[session_id].append({"role": "user", "content": user_input})
+                        chat_histories[session_id].append({"role": "assistant", "content": accumulated_content})
+                        
+                        # 限制历史记录长度
+                        trim_chat_history(session_id)
+                        
+                        logger.info(f"会话 {session_id} 更新历史记录，当前长度: {len(chat_histories[session_id])}")
+                        
                 except Exception as e:
                     logger.error(f"流式输出错误：{str(e)}", exc_info=True)
                     yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
