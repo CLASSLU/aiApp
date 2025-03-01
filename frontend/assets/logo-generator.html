@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Logo Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 50px;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            margin: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4a6cfa;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #3a5cda;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI App Logo Generator</h1>
+    <p>这个工具会生成一个简单的AI应用logo</p>
+    
+    <canvas id="logoCanvas" width="200" height="200"></canvas>
+    <br>
+    <button id="downloadBtn">下载logo.png</button>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById('logoCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 画背景
+            ctx.fillStyle = '#4a6cfa';
+            ctx.fillRect(0, 0, 200, 200);
+            
+            // 画圆形
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(100, 100, 70, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 画AI文字
+            ctx.fillStyle = '#4a6cfa';
+            ctx.font = 'bold 80px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('AI', 100, 100);
+            
+            // 设置下载按钮
+            document.getElementById('downloadBtn').addEventListener('click', function() {
+                const link = document.createElement('a');
+                link.download = 'logo.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+        });
+    </script>
+</body>
+</html> 

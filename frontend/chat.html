@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI助手 - 聊天对话</title>
-    <link rel="stylesheet" href="./assets/chat.css">
-    <link rel="stylesheet" href="./assets/prism-dark.css">
+    <title>AI 聊天功能</title>
+    <link rel="stylesheet" href="assets/style.css">
+    <link rel="stylesheet" href="assets/chat.css">
+    <link rel="stylesheet" href="assets/prism-dark.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/styles/atom-one-dark.min.css">
     <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/highlight.min.js"></script>
@@ -17,8 +18,128 @@
     <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/languages/html.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/languages/css.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked@4.0.0/marked.min.js"></script>
-    <script src="./assets/config.js"></script>
+    <script>
+        // Docker 环境配置
+        window.DOCKER_API_URL = 'http://backend:5000';
+    </script>
+    <script src="assets/config.js"></script>
     <style>
+        /* 聊天页面特定样式 */
+        .chat-content {
+            height: 100%;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        #chat-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chat-header {
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .sidebar {
+            width: 250px;
+            background: rgba(0, 0, 0, 0.5);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .app-container {
+            display: flex;
+            height: 100%;
+        }
+        
+        #chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 15px;
+            border-radius: 8px;
+            max-width: 85%;
+        }
+        
+        .message.user {
+            background-color: rgba(74, 144, 226, 0.7);
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 0;
+        }
+        
+        .message.ai {
+            background-color: rgba(255, 255, 255, 0.15);
+            color: white;
+            margin-right: auto;
+            border-bottom-left-radius: 0;
+        }
+        
+        #input-container {
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.5);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+        }
+        
+        #user-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            border-radius: 20px;
+            padding: 12px 15px;
+            resize: none;
+            max-height: 120px;
+            min-height: 40px;
+        }
+        
+        #user-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        #send-button, #stop-button {
+            background-color: #4A90E2;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            margin-left: 10px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #stop-button {
+            background-color: #e74c3c;
+            display: none;
+        }
+        
+        /* 调整内容布局以匹配主页 */
+        .content-layout {
+            height: calc(100vh - 130px); /* 减去header和footer的高度 */
+            display: flex;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f5f5f5;
@@ -76,6 +197,12 @@
             flex: 1;
             overflow-y: auto;
             padding: 10px 0;
+        }
+
+        .sessions-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
         }
 
         .session-item {
@@ -147,25 +274,11 @@
             flex: 1;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
         }
 
-        #chat-container {
-            flex: 1;
+        .header-controls {
             display: flex;
-            flex-direction: column;
-            max-width: 100%;
-            margin: 0 auto;
-            overflow: hidden;
-        }
-
-        .chat-header {
-            display: flex;
-            justify-content: space-between;
             align-items: center;
-            padding: 15px 20px;
-            background-color: #fff;
-            border-bottom: 1px solid #e5e5e5;
         }
 
         .model-container {
@@ -176,16 +289,21 @@
         .model-label {
             margin-right: 10px;
             font-weight: 500;
-            color: #34495e;
+            color: #ffffff;
         }
 
         #model-select {
             padding: 8px 12px;
             border-radius: 4px;
             border: 1px solid #ddd;
-            background-color: #f9f9f9;
-            color: #333;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
             min-width: 200px;
+        }
+        
+        #model-select option {
+            background-color: #2c3e50;
+            color: #ffffff;
         }
 
         .prompt-container {
@@ -197,16 +315,21 @@
         .prompt-label {
             margin-right: 10px;
             font-weight: 500;
-            color: #34495e;
+            color: #ffffff;
         }
 
         #prompt-select {
             padding: 8px 12px;
             border-radius: 4px;
             border: 1px solid #ddd;
-            background-color: #f9f9f9;
-            color: #333;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
             min-width: 200px;
+        }
+        
+        #prompt-select option {
+            background-color: #2c3e50;
+            color: #ffffff;
         }
 
         .new-chat-btn {
@@ -226,38 +349,46 @@
             background-color: #2980b9;
         }
 
-        #chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            background-color: #f9f9f9;
+        .main-header {
+            background-color: #fff;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        .message {
-            margin-bottom: 15px;
+        .main-header nav {
+            display: flex;
+            gap: 20px;
+        }
+
+        .main-header nav a {
+            color: #34495e;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 5px 10px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .main-header nav a:hover {
+            background-color: #f5f5f5;
+        }
+
+        .main-header nav a.active {
+            color: #3498db;
+            border-bottom: 2px solid #3498db;
+        }
+
+        footer {
+            text-align: center;
             padding: 15px;
-            border-radius: 10px;
-            max-width: 85%;
-            position: relative;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            overflow-wrap: break-word;
-            word-wrap: break-word;
-            word-break: break-all;
-            white-space: normal;
-        }
-
-        .message.user {
-            background-color: #e5f7ff;
-            color: #333;
-            margin-left: auto;
-            border-bottom-right-radius: 0;
-        }
-
-        .message.ai {
-            background-color: #2980b9;
-            color: white;
-            margin-right: auto;
-            border-bottom-left-radius: 0;
+            background-color: #34495e;
+            color: #ecf0f1;
+            font-size: 14px;
+            border-top: 1px solid #2c3e50;
+            margin-top: auto; /* 确保页脚在底部 */
         }
 
         .message.ai a {
@@ -272,77 +403,6 @@
 
         .message.ai ul, .message.ai ol {
             padding-left: 1.5em;
-        }
-
-        #input-container {
-            display: flex;
-            padding: 15px 20px;
-            background-color: #fff;
-            border-top: 1px solid #e5e5e5;
-            align-items: center;
-            position: relative;
-        }
-
-        #user-input {
-            flex: 1;
-            border: 1px solid #ddd;
-            border-radius: 22px;
-            padding: 12px 15px;
-            font-size: 14px;
-            resize: none;
-            overflow-y: auto;
-            max-height: 150px;
-            min-height: 45px;
-            outline: none;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) inset;
-            transition: border-color 0.2s;
-        }
-
-        #user-input:focus {
-            border-color: #3498db;
-        }
-
-        #send-button {
-            background-color: #3498db;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 45px;
-            height: 45px;
-            margin-left: 10px;
-            cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            transition: background-color 0.2s;
-        }
-
-        #send-button:hover {
-            background-color: #2980b9;
-        }
-
-        #send-button:disabled {
-            background-color: #95a5a6;
-            cursor: not-allowed;
-        }
-
-        #stop-button {
-            background-color: #e74c3c;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 45px;
-            height: 45px;
-            margin-left: 10px;
-            cursor: pointer;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            transition: background-color 0.2s;
-        }
-
-        #stop-button:hover {
-            background-color: #c0392b;
         }
 
         @media (max-width: 768px) {
@@ -379,6 +439,11 @@
             .new-chat-btn {
                 margin-top: 10px;
             }
+            
+            .content-layout {
+                height: calc(100vh - 180px); /* 调整移动设备上的高度 */
+                padding: 10px;
+            }
         }
 
         /* 代码块样式 */
@@ -386,8 +451,8 @@
             margin: 15px 0;
             border-radius: 5px;
             overflow: hidden;
-            background-color: #282c34;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            background-color: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
 
         .code-block-header {
@@ -395,13 +460,13 @@
             justify-content: space-between;
             align-items: center;
             padding: 8px 12px;
-            background-color: #21252b;
+            background-color: rgba(40, 44, 52, 0.8);
             border-bottom: 1px solid #181a1f;
         }
 
         .code-lang-tag {
             font-size: 12px;
-            color: #abb2bf;
+            color: #ebb734;
             text-transform: uppercase;
         }
 
@@ -483,78 +548,128 @@
             border-top: 1px solid rgba(255, 255, 255, 0.2);
             margin: 1em 0;
         }
+
+        /* AI消息中的代码样式 */
+        .message.ai pre {
+            background-color: rgba(40, 44, 52, 0.95);
+        }
+
+        .message.ai code {
+            background-color: rgba(40, 44, 52, 0.6);
+            color: #abb2bf;
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: 'Fira Code', monospace;
+        }
     </style>
 </head>
 <body>
-    <header class="main-header">
-        <div class="logo">
-            <a href="/">
-                <img src="./assets/logo.png" alt="AI助手" height="30">
-            </a>
-        </div>
+    <header>
+        <div class="logo">AI</div>
         <nav>
-            <a href="index.html">首页</a>
-            <a href="chat.html" class="active">对话</a>
-            <a href="generate.html">生成图像</a>
+            <ul>
+                <li><a href="index.html">主页</a></li>
+                <li><a href="chat.html">聊天功能</a></li>
+                <li><a href="generate.html">图像生成</a></li>
+            </ul>
         </nav>
     </header>
 
-    <div class="app-container">
-        <!-- 侧边栏: 会话列表 -->
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <div class="sidebar-title">会话列表</div>
-                <button class="new-chat-sidebar-btn">
-                    <i class="fas fa-plus"></i> 新建
-                </button>
-            </div>
-            <div class="sessions-container">
-                <ul id="sessions-list" class="sessions-list"></ul>
-            </div>
-        </div>
-
-        <!-- 主要聊天区域 -->
-        <div class="main-content">
-            <div id="chat-container">
-                <div class="chat-header">
-                    <div class="header-controls">
-                        <div class="model-container">
-                            <span class="model-label">模型:</span>
-                            <select id="model-select"></select>
+    <div class="main-content">
+        <div class="content-layout">
+            <div class="chat-content">
+                <div class="app-container">
+                    <!-- 侧边栏: 会话列表 -->
+                    <div class="sidebar">
+                        <div class="sidebar-header">
+                            <div class="sidebar-title">会话列表</div>
+                            <button class="new-chat-sidebar-btn">
+                                <i class="fas fa-plus"></i> 新建
+                            </button>
                         </div>
-                        <div class="prompt-container">
-                            <span class="prompt-label">场景:</span>
-                            <select id="prompt-select">
-                                <option value="">- 选择场景提示词 -</option>
-                                <option value="programmer">程序员</option>
-                                <option value="product_manager">产品经理</option>
-                                <option value="doctor">医疗咨询</option>
-                                <option value="civil_servant">公务员</option>
-                            </select>
+                        <div class="sessions-container">
+                            <ul id="sessions-list" class="sessions-list"></ul>
                         </div>
                     </div>
-                    <button class="new-chat-btn">
-                        <i class="fas fa-plus"></i> 新建对话
-                    </button>
-                </div>
-                <div id="chat-messages"></div>
-                <div id="input-container">
-                    <textarea id="user-input" placeholder="输入消息，Shift+Enter换行..." rows="1"></textarea>
-                    <button id="send-button">
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
-                    <button id="stop-button">
-                        <i class="fas fa-stop"></i>
-                    </button>
+                    
+                    <!-- 主要聊天区域 -->
+                    <div id="chat-container">
+                        <div class="chat-header">
+                            <div class="header-controls">
+                                <div class="model-container">
+                                    <span class="model-label">模型:</span>
+                                    <select id="model-select"></select>
+                                </div>
+                                <div class="prompt-container">
+                                    <span class="prompt-label">场景:</span>
+                                    <select id="prompt-select">
+                                        <option value="">- 选择专业场景 -</option>
+                                        <optgroup label="技术领域">
+                                            <option value="programmer_backend">后端开发工程师</option>
+                                            <option value="programmer_frontend">前端开发工程师</option>
+                                            <option value="programmer_devops">DevOps/运维工程师</option>
+                                            <option value="programmer_ai">AI/机器学习工程师</option>
+                                            <option value="data_scientist">数据科学家</option>
+                                            <option value="security_expert">网络安全专家</option>
+                                        </optgroup>
+                                        <optgroup label="商业领域">
+                                            <option value="product_manager">产品经理</option>
+                                            <option value="marketing_specialist">市场营销专家</option>
+                                            <option value="financial_analyst">金融分析师</option>
+                                            <option value="business_consultant">商业顾问</option>
+                                            <option value="hr_professional">人力资源专家</option>
+                                        </optgroup>
+                                        <optgroup label="医疗健康">
+                                            <option value="physician">临床医生</option>
+                                            <option value="medical_researcher">医学研究员</option>
+                                            <option value="pharmacist">药剂师</option>
+                                            <option value="nutritionist">营养学家</option>
+                                            <option value="mental_health">心理健康顾问</option>
+                                        </optgroup>
+                                        <optgroup label="教育领域">
+                                            <option value="teacher_k12">中小学教师</option>
+                                            <option value="professor">大学教授/研究员</option>
+                                            <option value="education_admin">教育管理者</option>
+                                            <option value="career_counselor">职业规划顾问</option>
+                                        </optgroup>
+                                        <optgroup label="法律政务">
+                                            <option value="legal_advisor">法律顾问</option>
+                                            <option value="civil_servant">公务员</option>
+                                            <option value="policy_analyst">政策分析师</option>
+                                            <option value="patent_attorney">专利律师</option>
+                                        </optgroup>
+                                        <optgroup label="创意艺术">
+                                            <option value="content_creator">内容创作者</option>
+                                            <option value="designer">设计师</option>
+                                            <option value="writer">作家/编剧</option>
+                                            <option value="journalist">记者/媒体工作者</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                            </div>
+                            <button class="new-chat-btn">
+                                <i class="fas fa-plus"></i> 新建对话
+                            </button>
+                        </div>
+                        <div id="chat-messages"></div>
+                        <div id="input-container">
+                            <textarea id="user-input" placeholder="输入消息，Shift+Enter换行..." rows="1"></textarea>
+                            <button id="send-button">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                            <button id="stop-button">
+                                <i class="fas fa-stop"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <footer>
-        <p>&copy; 2023 AI助手平台 保留所有权利</p>
+        <p>© 2025 AI 多功能平台. 袁路保留所有权利。</p>
     </footer>
-
     <script src="./assets/chat.js"></script>
 </body>
 </html>

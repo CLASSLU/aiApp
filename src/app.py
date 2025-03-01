@@ -402,7 +402,7 @@ def create_app():
         request.start_time = time.perf_counter()
 
     @app.route('/')
-    def health_check():
+    def root_health_check():
         return {'status': 'ready', 'service': 'image-generator'}
 
     @app.route('/api/generate', methods=['POST'])
@@ -546,11 +546,13 @@ def create_app():
                 session_id = request.args.get('session_id')
                 user_input = request.args.get('user_input')
                 history = None
+                system_prompt = request.args.get('system_prompt')
             else:
                 data = request.get_json()
                 session_id = data.get('session_id')
                 user_input = data.get('user_input')
                 history = data.get('history')
+                system_prompt = data.get('system_prompt')
 
             if not session_id or not user_input:
                 return jsonify({"error": "缺少必要参数"}), 400
@@ -564,6 +566,11 @@ def create_app():
 
             # 构建消息历史
             messages = []
+            
+            # 如果提供了系统提示词，添加为系统消息
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+                chat_logger.debug(f"使用系统提示词: {system_prompt[:100]}{'...' if len(system_prompt) > 100 else ''}")
             
             # 如果前端传来了历史记录，使用前端的历史
             history_source = "none"
@@ -582,9 +589,14 @@ def create_app():
             # 添加当前用户消息
             messages.append({"role": "user", "content": user_input})
             
+            # 获取用户选择的模型
+            model = "deepseek-ai/DeepSeek-V2.5"  # 默认模型
+            if request.method == 'POST' and data.get('model'):
+                model = data.get('model')
+                
             # 构造请求参数
             payload = {
-                "model": "deepseek-ai/DeepSeek-V2.5",
+                "model": model,
                 "messages": messages,
                 "temperature": 0.7,
                 "max_tokens": 2000,

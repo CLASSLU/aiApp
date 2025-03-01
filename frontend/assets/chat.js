@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const sendButton = document.getElementById('send-button');
     const stopButton = document.getElementById('stop-button');
     const newChatButton = document.querySelector('.new-chat-btn');
+    const newChatSidebarButton = document.querySelector('.new-chat-sidebar-btn'); // 添加侧边栏新建按钮引用
     const modelSelect = document.getElementById('model-select');
     const promptSelect = document.getElementById('prompt-select');
     const sessionsList = document.getElementById('sessions-list');
@@ -16,10 +17,16 @@ document.addEventListener('DOMContentLoaded', function() {
     let sessionId = localStorage.getItem('currentChatSessionId');
     let messageHistory = [];
     let currentController = null; // 用于存储当前的 AbortController
+    let aiResponseInProgress = false; // 标记AI是否正在响应
+    let currentResponseText = ''; // 当前累积的响应文本
+    
+    // 添加页面可见性监听
+    let pageIsVisible = true;
     
     // 添加缓存相关的常量
     const CACHE_KEY = 'modelListCache';
     const CACHE_DURATION = 5 * 60 * 1000; // 5分钟的缓存时间
+    const PENDING_REQUEST_KEY = 'pendingChatRequest'; // 用于存储正在处理的请求
 
     // 添加默认模型列表
     const DEFAULT_MODELS = {
@@ -44,11 +51,108 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 场景提示词模板
     const PROMPT_TEMPLATES = {
-        programmer: "我是一名开发者，需要您作为编程助手帮助我。请以程序员的视角回答我的问题。",
-        product_manager: "我是一名产品经理，需要您协助我进行产品设计和规划。请从产品管理的角度提供专业建议。",
-        doctor: "我需要一些医疗方面的建议，请以医疗专业人士的角度回答我的问题，但请注明您不能替代真实的医生诊断。",
-        civil_servant: "我是一名公务员，需要您协助我处理政策研究和文件起草工作。请从行政管理的角度提供专业建议。"
+        // 技术领域
+        programmer_backend: "我是一名后端开发工程师，请您作为专业的后端开发顾问，帮助我解决服务器架构、API设计、数据库优化、性能调优、安全问题等方面的技术难题。请提供符合行业最佳实践的建议，并考虑可扩展性、可维护性和安全性。",
+        programmer_frontend: "我是一名前端开发工程师，请您作为专业的前端技术顾问，帮助我解决UI/UX实现、响应式设计、前端框架使用、性能优化、浏览器兼容性等方面的问题。请提供符合现代前端开发标准的建议，并注重用户体验和页面性能。",
+        programmer_devops: "我是一名DevOps/运维工程师，请您作为DevOps专家，帮助我解决CI/CD流程、自动化部署、容器化管理、云服务配置、监控告警、系统稳定性等方面的问题。请提供符合DevOps最佳实践的建议，注重自动化、可靠性和安全性。",
+        programmer_ai: "我是一名AI/机器学习工程师，请您作为AI领域专家，帮助我解决模型训练、算法选择、数据处理、模型优化、AI系统部署等方面的问题。请提供符合AI研发最佳实践的建议，考虑算法效率、模型性能和实际应用价值。",
+        data_scientist: "我是一名数据科学家，请您作为数据分析专家，帮助我解决数据清洗、特征工程、统计分析、数据可视化、预测模型构建等方面的问题。请提供专业的数据科学方法论指导，注重数据洞察的准确性和可行性。",
+        security_expert: "我是一名网络安全专家，请您作为安全顾问，帮助我解决系统漏洞评估、安全架构设计、威胁检测、安全审计、渗透测试等方面的问题。请提供符合网络安全最佳实践的建议，保障系统和数据的完整性、机密性和可用性。",
+        
+        // 商业领域
+        product_manager: "我是一名产品经理，请您作为产品管理顾问，帮助我解决产品规划、需求分析、用户调研、功能优先级、产品路线图、市场定位等方面的问题。请提供符合产品经理思维的专业建议，注重产品价值和用户体验。",
+        marketing_specialist: "我是一名市场营销专家，请您作为营销顾问，帮助我解决市场策略、品牌建设、营销活动、用户增长、市场分析、竞品研究等方面的问题。请提供符合现代营销理念的专业建议，关注ROI和用户转化。",
+        financial_analyst: "我是一名金融分析师，请您作为财务顾问，帮助我解决财务分析、投资评估、风险管理、预算规划、财务报表解读等方面的问题。请提供符合财务专业规范的建议，考虑风险控制和收益最大化。",
+        business_consultant: "我是一名商业顾问，请您作为管理咨询专家，帮助我解决业务战略、组织优化、流程再造、企业转型、商业模式创新等方面的问题。请提供符合管理咨询最佳实践的建议，关注企业价值和可持续发展。",
+        hr_professional: "我是一名人力资源专家，请您作为HR顾问，帮助我解决人才招聘、员工培训、绩效管理、文化建设、薪酬体系、团队发展等方面的问题。请提供符合现代人力资源管理理念的专业建议，平衡企业需求和员工发展。",
+        
+        // 医疗健康
+        physician: "我是一名临床医生，请您作为医学顾问，帮助我讨论疾病诊疗思路、治疗方案选择、医学研究进展、临床指南解读等方面的问题。请基于循证医学提供专业意见，同时明确您不能替代实际医疗诊断，建议患者及时就医。",
+        medical_researcher: "我是一名医学研究员，请您作为医学研究顾问，帮助我讨论研究设计、数据分析方法、文献综述、研究伦理、成果转化等方面的问题。请提供符合科学研究规范的专业建议，注重研究的严谨性和临床价值。",
+        pharmacist: "我是一名药剂师，请您作为药学顾问，帮助我讨论药物相互作用、给药方案、药物不良反应、药物经济学、处方审核等方面的问题。请提供符合药学专业规范的建议，注重用药安全和有效性。",
+        nutritionist: "我是一名营养学家，请您作为营养顾问，帮助我讨论膳食规划、营养评估、特殊人群饮食、营养干预、体重管理等方面的问题。请提供符合营养学科学依据的专业建议，注重个体化的营养方案。",
+        mental_health: "我是一名心理健康顾问，请您作为心理学专家，帮助我讨论心理疾病、情绪管理、压力应对、心理干预技术、潜能开发等方面的问题。请提供符合心理学专业规范的建议，同时强调严重心理问题需寻求专业医疗机构帮助。",
+        
+        // 教育领域
+        teacher_k12: "我是一名中小学教师，请您作为教育专家，帮助我解决课程设计、教学方法、学生管理、差异化教学、家校沟通、教育评估等方面的问题。请提供符合现代教育理念的专业建议，注重学生全面发展。",
+        professor: "我是一名大学教授/研究员，请您作为高等教育专家，帮助我讨论学术研究、教学创新、科研项目、学科建设、研究生培养等方面的问题。请提供符合学术规范的专业建议，注重研究的原创性和教学的有效性。",
+        education_admin: "我是一名教育管理者，请您作为教育管理顾问，帮助我解决教育政策解读、学校管理、教师发展、课程规划、教育评价、资源配置等方面的问题。请提供符合教育管理最佳实践的建议，注重教育质量和公平性。",
+        career_counselor: "我是一名职业规划顾问，请您作为职业发展专家，帮助我解决职业定位、能力评估、简历制作、面试技巧、职业转型、继续教育等方面的问题。请提供符合职业发展规律的专业建议，助力职业成长和自我实现。",
+        
+        // 法律政务
+        legal_advisor: "我是一名法律顾问，请您作为法律专家，帮助我分析法律问题、合同审查、风险防范、法规解读、合规建设等方面的问题。请提供基于法律专业知识的建议，同时明确您不能替代正式的法律意见，复杂法律问题建议咨询执业律师。",
+        civil_servant: "我是一名公务员，请您作为行政事务顾问，帮助我解决政策研究、文件起草、公共管理、行政程序、政务服务等方面的问题。请提供符合行政工作规范的专业建议，注重依法行政和公共服务质量。",
+        policy_analyst: "我是一名政策分析师，请您作为政策研究专家，帮助我解决政策评估、趋势分析、影响预测、方案比较、建议提炼等方面的问题。请提供基于系统思维的政策分析框架，注重政策的可行性和有效性。",
+        patent_attorney: "我是一名专利律师，请您作为知识产权专家，帮助我解决专利检索、专利申请、知识产权保护、侵权分析、IP战略等方面的问题。请提供符合知识产权专业规范的建议，关注创新保护和风险防范。",
+        
+        // 创意艺术
+        content_creator: "我是一名内容创作者，请您作为创意顾问，帮助我解决内容策划、受众分析、创意构思、叙事技巧、传播策略等方面的问题。请提供具有创意性和专业性的建议，注重内容的原创性和传播效果。",
+        designer: "我是一名设计师，请您作为设计专家，帮助我解决设计理念、美学表达、用户体验、设计趋势、作品集构建等方面的问题。请提供符合设计原则的专业建议，平衡美学价值和功能需求。",
+        writer: "我是一名作家/编剧，请您作为文学创作顾问，帮助我解决情节构思、角色塑造、场景描写、对白设计、叙事节奏等方面的问题。请提供符合文学创作规律的专业建议，注重故事的感染力和艺术价值。",
+        journalist: "我是一名记者/媒体工作者，请您作为新闻传播专家，帮助我解决新闻写作、信息验证、采访技巧、媒体伦理、数据新闻等方面的问题。请提供符合新闻专业规范的建议，坚持真实、客观、平衡的新闻价值观。"
     };
+
+    // 检查是否有未完成的请求
+    function checkPendingRequest() {
+        const pendingRequest = localStorage.getItem(PENDING_REQUEST_KEY);
+        if (pendingRequest) {
+            try {
+                const requestData = JSON.parse(pendingRequest);
+                if (requestData.sessionId === sessionId) {
+                    // 确认是否要恢复之前的请求
+                    if (confirm('发现您之前有一个未完成的对话，是否要继续？')) {
+                        // 如果用户确认，将消息添加到输入框并触发发送
+                        userInput.value = requestData.message;
+                        setTimeout(() => handleChat(), 500);
+                    }
+                }
+                // 无论如何都清除这个记录
+                localStorage.removeItem(PENDING_REQUEST_KEY);
+            } catch (e) {
+                console.error('解析未完成请求数据失败:', e);
+                localStorage.removeItem(PENDING_REQUEST_KEY);
+            }
+        }
+    }
+
+    // 监听页面可见性变化
+    document.addEventListener('visibilitychange', function() {
+        pageIsVisible = document.visibilityState === 'visible';
+        console.log('页面可见性变化：', pageIsVisible ? '可见' : '不可见');
+        
+        // 如果页面重新变为可见，并且之前有未完成的响应，可以显示状态提示
+        if (pageIsVisible && aiResponseInProgress) {
+            // 显示一个提示，告知用户响应仍在继续
+            displayStatusMessage('AI响应正在继续处理...', 'status');
+        }
+    });
+
+    // 在页面即将卸载时保存请求状态
+    window.addEventListener('beforeunload', function() {
+        // 如果正在处理请求，保存当前状态
+        if (aiResponseInProgress && userInput.value.trim()) {
+            const pendingData = {
+                sessionId: sessionId,
+                message: userInput.value.trim(),
+                timestamp: Date.now()
+            };
+            localStorage.setItem(PENDING_REQUEST_KEY, JSON.stringify(pendingData));
+        }
+    });
+
+    // 显示状态消息
+    function displayStatusMessage(message, type) {
+        const statusDiv = document.createElement('div');
+        statusDiv.className = `message ${type}`;
+        statusDiv.textContent = message;
+        chatMessages.appendChild(statusDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        
+        // 状态消息在2秒后自动移除
+        setTimeout(() => {
+            statusDiv.remove();
+        }, 2000);
+    }
 
     // 配置 marked 选项
     marked.setOptions({
@@ -88,6 +192,8 @@ document.addEventListener('DOMContentLoaded', function() {
             loadChatHistory();
             // 更新会话列表UI，标记当前会话为激活状态
             updateSessionsList();
+            // 检查是否有未完成的请求
+            checkPendingRequest();
         }
     }
 
@@ -153,6 +259,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // 切换到指定会话
     function switchSession(id) {
         if (id === sessionId) return; // 已经是当前会话
+        
+        // 如果正在获取AI回复，先取消
+        if (currentController) {
+            currentController.abort();
+            currentController = null;
+            aiResponseInProgress = false;
+            stopButton.style.display = 'none';
+            sendButton.disabled = false;
+        }
         
         // 保存当前会话数据
         if (sessionId && allSessions[sessionId]) {
@@ -265,6 +380,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function createNewSession() {
+        console.log('创建新会话');
+        
+        // 如果正在获取AI回复，先取消
+        if (currentController) {
+            currentController.abort();
+            currentController = null;
+            aiResponseInProgress = false;
+            stopButton.style.display = 'none';
+            sendButton.disabled = false;
+        }
+        
         const id = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         
         // 创建新会话对象
@@ -300,6 +426,26 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 更新会话列表
         updateSessionsList();
+        
+        console.log('新会话创建完成：', id);
+    }
+
+    // 复制消息内容到剪贴板
+    function copyMessageToClipboard(message) {
+        navigator.clipboard.writeText(message).then(function() {
+            displayStatusMessage('已复制到剪贴板', 'status');
+        }).catch(function(err) {
+            console.error('复制失败:', err);
+            displayStatusMessage('复制失败', 'error');
+        });
+    }
+
+    // 重发消息
+    function resendMessage(message) {
+        userInput.value = message;
+        userInput.style.height = 'auto';
+        userInput.style.height = (userInput.scrollHeight) + 'px';
+        handleChat();
     }
 
     function displayMessage(message, role) {
@@ -327,6 +473,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // 为所有代码块添加复制按钮
             messageDiv.querySelectorAll('pre code').forEach(function(block) {
                 const pre = block.parentNode;
+                // 检查是否已经被包装
+                if (pre.parentNode.className === 'code-block-wrapper') {
+                    return;
+                }
+                
                 const wrapper = document.createElement('div');
                 wrapper.className = 'code-block-wrapper';
                 
@@ -364,12 +515,91 @@ document.addEventListener('DOMContentLoaded', function() {
                 wrapper.appendChild(pre);
             });
         } else {
-            // 用户消息直接显示文本
-            messageDiv.textContent = message;
+            // 创建消息内容容器
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = message;
+            messageDiv.appendChild(contentDiv);
+            
+            // 创建消息操作按钮容器
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'message-actions';
+            
+            // 复制按钮
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'message-action-btn copy-message-btn';
+            copyBtn.innerHTML = '<i class="fas fa-copy"></i>';
+            copyBtn.title = '复制消息';
+            copyBtn.addEventListener('click', () => copyMessageToClipboard(message));
+            
+            // 重发按钮
+            const resendBtn = document.createElement('button');
+            resendBtn.className = 'message-action-btn resend-message-btn';
+            resendBtn.innerHTML = '<i class="fas fa-redo-alt"></i>';
+            resendBtn.title = '重新发送';
+            resendBtn.addEventListener('click', () => resendMessage(message));
+            
+            actionsDiv.appendChild(copyBtn);
+            actionsDiv.appendChild(resendBtn);
+            messageDiv.appendChild(actionsDiv);
         }
         
         // 添加到聊天界面
         chatMessages.appendChild(messageDiv);
+        
+        // 滚动到最新消息
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // 更新AI响应流式显示
+    function updateAIResponse(aiMessageDiv, content) {
+        // 使用 marked 渲染 markdown
+        aiMessageDiv.innerHTML = marked.parse(content);
+        
+        // 为所有代码块添加复制按钮
+        aiMessageDiv.querySelectorAll('pre code').forEach(function(block) {
+            // 检查是否已添加了复制按钮
+            if (block.parentNode.parentNode.className === 'code-block-wrapper') {
+                return;
+            }
+            
+            const pre = block.parentNode;
+            const wrapper = document.createElement('div');
+            wrapper.className = 'code-block-wrapper';
+            
+            // 获取语言
+            const langMatch = block.className.match(/language-(\w+)/);
+            const lang = langMatch ? langMatch[1] : '';
+            
+            // 创建代码块头部
+            const header = document.createElement('div');
+            header.className = 'code-block-header';
+            
+            const langTag = document.createElement('div');
+            langTag.className = 'code-lang-tag';
+            langTag.textContent = lang || 'code';
+            
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'copy-button';
+            copyBtn.innerHTML = '<i class="fas fa-copy"></i> 复制';
+            copyBtn.onclick = function() {
+                navigator.clipboard.writeText(block.textContent).then(function() {
+                    const originalText = copyBtn.innerHTML;
+                    copyBtn.innerHTML = '<i class="fas fa-check"></i> 已复制';
+                    setTimeout(function() {
+                        copyBtn.innerHTML = originalText;
+                    }, 2000);
+                });
+            };
+            
+            header.appendChild(langTag);
+            header.appendChild(copyBtn);
+            
+            // 将原始pre包装在wrapper中
+            pre.parentNode.insertBefore(wrapper, pre);
+            wrapper.appendChild(header);
+            wrapper.appendChild(pre);
+        });
         
         // 滚动到最新消息
         chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -439,10 +669,32 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 清空输入框
         userInput.value = '';
+        userInput.style.height = 'auto';
         
         // 禁用发送按钮，显示停止按钮
         sendButton.disabled = true;
         stopButton.style.display = 'inline-block';
+        
+        // 创建一个AI消息div用于显示打字效果
+        const aiMessageDiv = document.createElement('div');
+        aiMessageDiv.className = 'message ai typing';
+        chatMessages.appendChild(aiMessageDiv);
+        
+        // 添加正在输入的指示
+        aiMessageDiv.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        
+        // 保存当前请求状态到 localStorage
+        const pendingData = {
+            sessionId: sessionId,
+            message: message,
+            timestamp: Date.now()
+        };
+        localStorage.setItem(PENDING_REQUEST_KEY, JSON.stringify(pendingData));
+        
+        // 重置当前响应文本
+        currentResponseText = '';
+        aiResponseInProgress = true;
         
         try {
             // 创建一个AbortController来处理取消请求
@@ -461,12 +713,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 requestData.model = selectedModel;
             }
             
+            // 获取场景提示词
+            const selectedPrompt = promptSelect.value;
+            if (selectedPrompt && PROMPT_TEMPLATES[selectedPrompt]) {
+                requestData.system_prompt = PROMPT_TEMPLATES[selectedPrompt];
+            }
+            
             // 发起聊天请求
             const response = await fetch(`${API_BASE_URL}${endpoints.chat}`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'X-Request-Source': 'webapp'
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(requestData),
                 signal: currentController.signal
@@ -479,12 +736,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const reader = response.body.getReader();
             const decoder = new TextDecoder('utf-8');
             
-            // 创建一个新的AI消息div
-            const aiMessageDiv = document.createElement('div');
-            aiMessageDiv.className = 'message ai';
-            chatMessages.appendChild(aiMessageDiv);
+            // 移除等待指示器
+            aiMessageDiv.classList.remove('typing');
+            aiMessageDiv.innerHTML = '';
             
-            let accumulatedContent = '';
             let inCodeBlock = false;
             
             // 处理流式响应
@@ -506,75 +761,38 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         if (parsed.type === 'assistant') {
                             // 添加到当前消息
-                            accumulatedContent += parsed.reply;
+                            currentResponseText += parsed.reply;
                             
                             // 检测是否在代码块内
                             if (parsed.reply.includes('```')) {
                                 inCodeBlock = !inCodeBlock;
                             }
                             
-                            // 使用 marked 渲染 markdown
-                            aiMessageDiv.innerHTML = marked.parse(accumulatedContent);
-                            
-                            // 为所有代码块添加复制按钮
-                            aiMessageDiv.querySelectorAll('pre code').forEach(function(block) {
-                                // 检查是否已添加了复制按钮
-                                if (block.parentNode.parentNode.className === 'code-block-wrapper') {
-                                    return;
-                                }
-                                
-                                const pre = block.parentNode;
-                                const wrapper = document.createElement('div');
-                                wrapper.className = 'code-block-wrapper';
-                                
-                                // 获取语言
-                                const langMatch = block.className.match(/language-(\w+)/);
-                                const lang = langMatch ? langMatch[1] : '';
-                                
-                                // 创建代码块头部
-                                const header = document.createElement('div');
-                                header.className = 'code-block-header';
-                                
-                                const langTag = document.createElement('div');
-                                langTag.className = 'code-lang-tag';
-                                langTag.textContent = lang || 'code';
-                                
-                                const copyBtn = document.createElement('button');
-                                copyBtn.className = 'copy-button';
-                                copyBtn.innerHTML = '<i class="fas fa-copy"></i> 复制';
-                                copyBtn.onclick = function() {
-                                    navigator.clipboard.writeText(block.textContent).then(function() {
-                                        const originalText = copyBtn.innerHTML;
-                                        copyBtn.innerHTML = '<i class="fas fa-check"></i> 已复制';
-                                        setTimeout(function() {
-                                            copyBtn.innerHTML = originalText;
-                                        }, 2000);
-                                    });
-                                };
-                                
-                                header.appendChild(langTag);
-                                header.appendChild(copyBtn);
-                                
-                                // 将原始pre包装在wrapper中
-                                pre.parentNode.insertBefore(wrapper, pre);
-                                wrapper.appendChild(header);
-                                wrapper.appendChild(pre);
-                            });
-                            
-                            // 滚动到最新消息
-                            chatMessages.scrollTop = chatMessages.scrollHeight;
+                            // 更新AI响应显示
+                            updateAIResponse(aiMessageDiv, currentResponseText);
                         }
                     } catch (e) {
                         console.error('解析消息失败:', e, line);
                     }
                 }
+                
+                // 如果页面不可见但流仍在继续，在控制台记录一下
+                if (!pageIsVisible) {
+                    console.log('页面不可见，但流式响应仍在继续...');
+                }
             }
             
+            // 流式响应完成
+            aiResponseInProgress = false;
+            
+            // 清除正在处理的请求记录
+            localStorage.removeItem(PENDING_REQUEST_KEY);
+            
             // 添加到历史记录
-            if (accumulatedContent) {
+            if (currentResponseText) {
                 messageHistory.push({
                     role: 'assistant',
-                    content: accumulatedContent
+                    content: currentResponseText
                 });
                 
                 // 更新会话数据
@@ -588,10 +806,18 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             if (error.name === 'AbortError') {
                 console.log('请求被用户取消');
+                // 移除打字指示器，显示已取消
+                aiMessageDiv.classList.remove('typing');
+                aiMessageDiv.textContent = '对话已取消';
+                // 清除正在处理的请求记录
+                localStorage.removeItem(PENDING_REQUEST_KEY);
             } else {
                 console.error('聊天请求失败:', error);
-                displayMessage(`发生错误: ${error.message}`, 'ai');
+                // 移除打字指示器，显示错误
+                aiMessageDiv.classList.remove('typing');
+                aiMessageDiv.textContent = `发生错误: ${error.message}`;
             }
+            aiResponseInProgress = false;
         } finally {
             // 恢复界面状态
             sendButton.disabled = false;
@@ -603,21 +829,29 @@ document.addEventListener('DOMContentLoaded', function() {
     // 应用场景提示词
     function applyPromptTemplate() {
         const selectedTemplate = promptSelect.value;
-        if (!selectedTemplate || !PROMPT_TEMPLATES[selectedTemplate]) return;
+        if (!selectedTemplate || !PROMPT_TEMPLATES[selectedTemplate]) {
+            // 如果没有选择场景，仅显示提示
+            promptSelect.title = "选择专业场景可以获得更专业的回答";
+            return;
+        }
         
         // 获取提示词模板
         const templateText = PROMPT_TEMPLATES[selectedTemplate];
         
-        // 添加到输入框
-        userInput.value = templateText;
-        
-        // 聚焦到输入框末尾
-        userInput.focus();
-        userInput.setSelectionRange(templateText.length, templateText.length);
+        // 设置工具提示，展示部分提示词内容
+        promptSelect.title = templateText.substring(0, 100) + "...";
     }
 
     // 事件监听
-    newChatButton.addEventListener('click', createNewSession);
+    if (newChatButton) {
+        console.log('绑定主要新建聊天按钮事件');
+        newChatButton.addEventListener('click', createNewSession);
+    }
+    
+    if (newChatSidebarButton) {
+        console.log('绑定侧边栏新建聊天按钮事件');
+        newChatSidebarButton.addEventListener('click', createNewSession);
+    }
     
     sendButton.addEventListener('click', handleChat);
     
@@ -633,12 +867,152 @@ document.addEventListener('DOMContentLoaded', function() {
             currentController.abort();
             stopButton.style.display = 'none';
             sendButton.disabled = false;
+            // 清除正在处理的请求记录
+            localStorage.removeItem(PENDING_REQUEST_KEY);
         }
     });
     
     promptSelect.addEventListener('change', applyPromptTemplate);
 
+    // 添加输入框自动调整高度
+    userInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
+    });
+
+    // 添加CSS样式
+    const style = document.createElement('style');
+    style.textContent = `
+        /* 分别设置AI消息和用户消息的背景样式 */
+        .message.ai {
+            /* 保持AI消息的原始样式 */
+        }
+        
+        .message.user {
+            background-color: rgba(40, 44, 52, 0.7) !important;
+            color: #abb2bf !important;
+            border: 1px solid rgba(60, 64, 72, 0.6) !important;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+            position: relative;
+            padding-right: 35px; /* 为操作按钮留出空间 */
+        }
+        
+        /* 消息内容区域保持透明 */
+        .message-content {
+            background-color: transparent !important;
+            white-space: pre-wrap; /* 保留用户消息中的换行 */
+            word-break: break-word;
+            color: #abb2bf !important;
+        }
+
+        .typing-indicator {
+            display: inline-flex;
+            align-items: center;
+        }
+        
+        .typing-indicator span {
+            height: 8px;
+            width: 8px;
+            margin: 0 2px;
+            background-color: #abb2bf;
+            border-radius: 50%;
+            display: inline-block;
+            animation: bounce 1.3s ease infinite;
+        }
+        
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.15s;
+        }
+        
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.3s;
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+        
+        .message.status {
+            background-color: rgba(255, 193, 7, 0.2);
+            color: #ffc107;
+            font-style: italic;
+            padding: 5px 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .message.error {
+            background-color: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+            font-style: italic;
+            padding: 5px 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .message-actions {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .message.user:hover .message-actions {
+            opacity: 1;
+        }
+
+        .message-action-btn {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: none;
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .copy-message-btn:hover {
+            background-color: rgba(52, 152, 219, 0.7);
+        }
+
+        .resend-message-btn:hover {
+            background-color: rgba(46, 204, 113, 0.7);
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .message.user {
+                padding-right: 40px;
+            }
+            
+            .message-actions {
+                right: 5px;
+            }
+            
+            .message-action-btn {
+                width: 22px;
+                height: 22px;
+                font-size: 0.8em;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+
     // 初始化
     fetchModels();
     initSessionsManagement();
+
+    console.log('聊天功能初始化完成');
 });
