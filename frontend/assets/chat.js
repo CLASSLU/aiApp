@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 messageDiv.style.transform = 'translateY(0)';
             }, 100);
         } else {
-            messageDiv.textContent = `你: ${message}`;
+            messageDiv.textContent = message;
         }
         
         chatMessages.appendChild(messageDiv);
@@ -240,7 +240,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // 显示用户消息
+        // 显示用户消息 - 直接显示内容，不添加"你"字样
         displayMessage(userInput, 'user');
         
         // 将用户消息添加到历史记录
