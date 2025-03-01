@@ -7,6 +7,20 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# 检查脚本文件格式，修复可能的行尾问题
+check_script_format() {
+    local script=$1
+    if [ -f "$script" ]; then
+        if grep -q $'\r' "$script" 2>/dev/null; then
+            echo -e "${YELLOW}警告: 脚本 $script 包含Windows风格换行符，正在修复...${NC}"
+            sed -i 's/\r$//' "$script"
+            echo -e "${GREEN}修复完成${NC}"
+        fi
+    else
+        echo -e "${YELLOW}警告: 脚本 $script 不存在，跳过格式检查${NC}"
+    fi
+}
+
 # 检测操作系统并设置环境变量
 if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
     export COMPOSE_CONVERT_WINDOWS_PATHS=1
@@ -110,6 +124,9 @@ case "$1" in
     validate_prod_subcommand "$2" || exit 1
     case "$2" in
       start)
+        # 检查热重载脚本格式
+        check_script_format "hot_reload.sh"
+        
         echo -e "${YELLOW}启动${ENV_TYPE}...${NC}"
         docker compose -f $COMPOSE_FILE up -d
         if [ $? -eq 0 ]; then
@@ -131,6 +148,9 @@ case "$1" in
         ;;
       restart)
         validate_service "$3" || exit 1
+        # 检查热重载脚本格式
+        check_script_format "hot_reload.sh"
+        
         if [ "$3" == "backend" ] || [ "$3" == "frontend" ]; then
           echo -e "${YELLOW}重启${ENV_TYPE}${3}服务...${NC}"
           docker compose -f $COMPOSE_FILE restart $3
@@ -154,6 +174,9 @@ case "$1" in
         ;;
       rebuild)
         validate_service "$3" || exit 1
+        # 检查热重载脚本格式
+        check_script_format "hot_reload.sh"
+        
         if [ "$3" == "backend" ] || [ "$3" == "frontend" ]; then
           echo -e "${YELLOW}重新构建${ENV_TYPE}${3}...${NC}"
           docker compose -f $COMPOSE_FILE build --no-cache $3
@@ -225,6 +248,11 @@ case "$1" in
         ;;
       restart)
         validate_service "$2" || exit 1
+        # 检查热重载脚本格式（开发环境不需要，但为了一致性也加上）
+        if [ "$2" == "backend" ]; then
+          check_script_format "hot_reload.sh"
+        fi
+        
         if [ "$2" == "backend" ] || [ "$2" == "frontend" ]; then
           echo -e "${YELLOW}重启${ENV_TYPE}${2}服务...${NC}"
           docker compose -f $COMPOSE_FILE restart $2
@@ -237,6 +265,8 @@ case "$1" in
         else
           echo -e "${YELLOW}重启${ENV_TYPE}...${NC}"
           docker compose -f $COMPOSE_FILE down
+          # 检查热重载脚本格式
+          check_script_format "hot_reload.sh"
           docker compose -f $COMPOSE_FILE up -d
           if [ $? -eq 0 ]; then
               echo -e "${GREEN}${ENV_TYPE}已重启!${NC}"
@@ -248,6 +278,11 @@ case "$1" in
         ;;
       rebuild)
         validate_service "$2" || exit 1
+        # 检查热重载脚本格式
+        if [ "$2" == "backend" ] || [ -z "$2" ]; then
+          check_script_format "hot_reload.sh"
+        fi
+        
         if [ "$2" == "backend" ] || [ "$2" == "frontend" ]; then
           echo -e "${YELLOW}重新构建${ENV_TYPE}${2}...${NC}"
           docker compose -f $COMPOSE_FILE build --no-cache $2
@@ -272,6 +307,11 @@ case "$1" in
         ;;
       build)
         validate_service "$2" || exit 1
+        # 检查热重载脚本格式
+        if [ "$2" == "backend" ] || [ -z "$2" ]; then
+          check_script_format "hot_reload.sh"
+        fi
+        
         if [ "$2" == "backend" ] || [ "$2" == "frontend" ]; then
           echo -e "${YELLOW}构建${ENV_TYPE}${2}...${NC}"
           docker compose -f $COMPOSE_FILE build $2

@@ -1,0 +1,27 @@
+# 设置默认行为为自动规范化行尾
+* text=auto
+
+# 指定文本文件的行尾规范化
+*.txt text
+*.md text
+*.json text
+*.yml text
+*.yaml text
+*.js text
+*.py text
+*.html text
+*.css text
+
+# 确保脚本文件始终使用LF行尾
+*.sh text eol=lf
+hot_reload.sh text eol=lf
+dev.sh text eol=lf
+
+# 二进制文件不应被修改
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.pdf binary 
