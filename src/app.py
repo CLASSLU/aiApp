@@ -124,21 +124,33 @@ def create_app():
 
     def add_cors_headers(response):
         origin = request.headers.get('Origin')
+        # 放宽CORS限制，允许更多的来源
         allowed_origins = [
             "http://113.45.251.116", 
-            "http://localhost:3000"
+            "http://113.45.251.116:80",
+            "http://113.45.251.116:3000",
+            "http://localhost",
+            "http://localhost:3000",
+            "http://localhost:80"
         ]
         
         # 精确匹配协议+域名+端口
         if origin in allowed_origins:
             response.headers['Access-Control-Allow-Origin'] = origin
-            response.headers['Vary'] = 'Origin'
         else:
-            response.headers['Access-Control-Allow-Origin'] = 'null'
-        
-        # 严格声明允许的Headers
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Requested-With, X-Request-Source'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+            # 如果域名相同但端口不同，也允许访问（生产环境常见情况）
+            parsed_origin = urlparse(origin or "")
+            if parsed_origin.netloc and parsed_origin.netloc.startswith('113.45.251.116'):
+                response.headers['Access-Control-Allow-Origin'] = origin
+            else:
+                # 默认允许当前域名
+                response.headers['Access-Control-Allow-Origin'] = origin or '*'
+                
+        response.headers['Vary'] = 'Origin'
+        # 添加更多允许的Headers
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Requested-With, X-Request-Source, Authorization'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, PUT, DELETE'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
         response.headers['Access-Control-Max-Age'] = '86400'
         return response
 
