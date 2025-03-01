@@ -343,4 +343,78 @@ code {
   .message {
     max-width: 95%;
   }
+}
+
+/* 代码块语言特定样式 */
+.docker-code-block pre {
+    background-color: #1e2a3a;
+    border-left: 3px solid #2496ed; /* Docker蓝色 */
+}
+
+.docker-code-block .code-block-header {
+    background-color: #1e2a3a;
+    border-bottom: 1px solid #2496ed;
+}
+
+.docker-code-block .code-lang-tag {
+    color: #2496ed;
+}
+
+.bash-code-block pre {
+    background-color: #282c34;
+    border-left: 3px solid #f9e64f; /* Bash黄色 */
+}
+
+.bash-code-block .code-block-header {
+    background-color: #282c34;
+    border-bottom: 1px solid #f9e64f;
+}
+
+.bash-code-block .code-lang-tag {
+    color: #f9e64f;
+}
+
+.yaml-code-block pre {
+    background-color: #1e2736;
+    border-left: 3px solid #cb171e; /* Docker Compose红色 */
+}
+
+.yaml-code-block .code-block-header {
+    background-color: #1e2736;
+    border-bottom: 1px solid #cb171e;
+}
+
+.yaml-code-block .code-lang-tag {
+    color: #cb171e;
+}
+
+/* 确保代码可以正确换行 */
+.code-block-wrapper pre code {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* 改进复制按钮交互效果 */
+.copy-button {
+    opacity: 0.7;
+    transition: all 0.2s ease-in-out;
+}
+
+.copy-button:hover {
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.copy-button:active {
+    transform: scale(0.95);
+}
+
+.copy-button.copied {
+    background-color: rgba(0, 255, 0, 0.2);
+    color: #d4d4d4;
+}
+
+/* 确保多行命令在bash代码块中正确显示 */
+.bash-code-block pre code .hljs-meta {
+    color: #f9e64f;
 } 

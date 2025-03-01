@@ -473,10 +473,43 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 保护代码块中的内容，防止被错误解析
         let codeBlocks = [];
-        let processedMarkdown = markdown.replace(/```([a-z]*)\n([\s\S]*?)```/g, function(match, language, code) {
+        let processedMarkdown = markdown.replace(/```([\w-]*)\n([\s\S]*?)```/g, function(match, language, code) {
+            // 规范化语言标识符
+            let normalizedLang = language.toLowerCase().trim();
+            
+            // 映射常见的语言别名到标准标识符
+            const langMap = {
+                'sh': 'bash',
+                'shell': 'bash',
+                'zsh': 'bash',
+                'dockerfile': 'docker',
+                'docker-compose': 'yaml',
+                'docker-file': 'docker',
+                'compose': 'yaml'
+            };
+            
+            if (langMap[normalizedLang]) {
+                normalizedLang = langMap[normalizedLang];
+            }
+            
+            // 处理没有指定语言的代码块
+            if (!normalizedLang) {
+                // 检测是否为Dockerfile
+                if (code.includes('FROM') && (code.includes('RUN') || code.includes('COPY') || code.includes('CMD'))) {
+                    normalizedLang = 'docker';
+                }
+                // 检测是否为bash脚本
+                else if (code.trim().startsWith('#!') || 
+                        (code.includes('#!/bin/') || code.includes('apt ') || 
+                         code.includes('yum ') || code.includes('pip ') || 
+                         code.includes('docker '))) {
+                    normalizedLang = 'bash';
+                }
+            }
+            
             // 存储代码块，替换为占位符
             const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
-            codeBlocks.push({ language, code, placeholder });
+            codeBlocks.push({ language: normalizedLang, code, placeholder });
             return placeholder;
         });
         
@@ -524,24 +557,83 @@ document.addEventListener('DOMContentLoaded', function() {
                 const langMatch = block.className.match(/language-(\w+)/);
                 const lang = langMatch ? langMatch[1] : '';
                 
+                // 特殊样式处理
+                if (lang === 'docker' || lang === 'dockerfile') {
+                    wrapper.classList.add('docker-code-block');
+                } else if (lang === 'bash' || lang === 'sh' || lang === 'shell') {
+                    wrapper.classList.add('bash-code-block');
+                } else if (lang === 'yaml' || lang === 'yml') {
+                    wrapper.classList.add('yaml-code-block');
+                }
+                
                 // 创建代码块头部
                 const header = document.createElement('div');
                 header.className = 'code-block-header';
                 
                 const langTag = document.createElement('div');
                 langTag.className = 'code-lang-tag';
-                langTag.textContent = lang || 'code';
+                
+                // 语言显示本地化
+                const langDisplayMap = {
+                    'docker': 'Docker',
+                    'dockerfile': 'Dockerfile',
+                    'bash': 'Bash',
+                    'sh': 'Shell',
+                    'yaml': 'YAML',
+                    'json': 'JSON',
+                    'python': 'Python',
+                    'javascript': 'JavaScript',
+                    'html': 'HTML',
+                    'css': 'CSS'
+                };
+                
+                langTag.textContent = langDisplayMap[lang] || lang || 'code';
                 
                 const copyBtn = document.createElement('button');
                 copyBtn.className = 'copy-button';
                 copyBtn.innerHTML = '<i class="fas fa-copy"></i> 复制';
                 copyBtn.onclick = function() {
-                    navigator.clipboard.writeText(block.textContent).then(function() {
+                    const codeText = block.textContent;
+                    navigator.clipboard.writeText(codeText).then(function() {
+                        // 临时改变按钮样式显示已复制
                         const originalText = copyBtn.innerHTML;
                         copyBtn.innerHTML = '<i class="fas fa-check"></i> 已复制';
+                        copyBtn.classList.add('copied');
+                        
                         setTimeout(function() {
                             copyBtn.innerHTML = originalText;
+                            copyBtn.classList.remove('copied');
                         }, 2000);
+                    }).catch(function(err) {
+                        console.error('复制失败:', err);
+                        
+                        // 在复制失败时使用备用方法
+                        const textarea = document.createElement('textarea');
+                        textarea.value = codeText;
+                        textarea.style.position = 'fixed';  // 避免页面滚动
+                        document.body.appendChild(textarea);
+                        textarea.focus();
+                        textarea.select();
+                        
+                        try {
+                            document.execCommand('copy');
+                            copyBtn.innerHTML = '<i class="fas fa-check"></i> 已复制';
+                            copyBtn.classList.add('copied');
+                            
+                            setTimeout(function() {
+                                copyBtn.innerHTML = originalText;
+                                copyBtn.classList.remove('copied');
+                            }, 2000);
+                        } catch (err) {
+                            console.error('备用复制方法失败:', err);
+                            copyBtn.innerHTML = '<i class="fas fa-times"></i> 复制失败';
+                            
+                            setTimeout(function() {
+                                copyBtn.innerHTML = originalText;
+                            }, 2000);
+                        }
+                        
+                        document.body.removeChild(textarea);
                     });
                 };
                 
@@ -614,24 +706,83 @@ document.addEventListener('DOMContentLoaded', function() {
             const langMatch = block.className.match(/language-(\w+)/);
             const lang = langMatch ? langMatch[1] : '';
             
+            // 特殊样式处理
+            if (lang === 'docker' || lang === 'dockerfile') {
+                wrapper.classList.add('docker-code-block');
+            } else if (lang === 'bash' || lang === 'sh' || lang === 'shell') {
+                wrapper.classList.add('bash-code-block');
+            } else if (lang === 'yaml' || lang === 'yml') {
+                wrapper.classList.add('yaml-code-block');
+            }
+            
             // 创建代码块头部
             const header = document.createElement('div');
             header.className = 'code-block-header';
             
             const langTag = document.createElement('div');
             langTag.className = 'code-lang-tag';
-            langTag.textContent = lang || 'code';
+            
+            // 语言显示本地化
+            const langDisplayMap = {
+                'docker': 'Docker',
+                'dockerfile': 'Dockerfile',
+                'bash': 'Bash',
+                'sh': 'Shell',
+                'yaml': 'YAML',
+                'json': 'JSON',
+                'python': 'Python',
+                'javascript': 'JavaScript',
+                'html': 'HTML',
+                'css': 'CSS'
+            };
+            
+            langTag.textContent = langDisplayMap[lang] || lang || 'code';
             
             const copyBtn = document.createElement('button');
             copyBtn.className = 'copy-button';
             copyBtn.innerHTML = '<i class="fas fa-copy"></i> 复制';
             copyBtn.onclick = function() {
-                navigator.clipboard.writeText(block.textContent).then(function() {
+                const codeText = block.textContent;
+                navigator.clipboard.writeText(codeText).then(function() {
+                    // 临时改变按钮样式显示已复制
                     const originalText = copyBtn.innerHTML;
                     copyBtn.innerHTML = '<i class="fas fa-check"></i> 已复制';
+                    copyBtn.classList.add('copied');
+                    
                     setTimeout(function() {
                         copyBtn.innerHTML = originalText;
+                        copyBtn.classList.remove('copied');
                     }, 2000);
+                }).catch(function(err) {
+                    console.error('复制失败:', err);
+                    
+                    // 在复制失败时使用备用方法
+                    const textarea = document.createElement('textarea');
+                    textarea.value = codeText;
+                    textarea.style.position = 'fixed';  // 避免页面滚动
+                    document.body.appendChild(textarea);
+                    textarea.focus();
+                    textarea.select();
+                    
+                    try {
+                        document.execCommand('copy');
+                        copyBtn.innerHTML = '<i class="fas fa-check"></i> 已复制';
+                        copyBtn.classList.add('copied');
+                        
+                        setTimeout(function() {
+                            copyBtn.innerHTML = originalText;
+                            copyBtn.classList.remove('copied');
+                        }, 2000);
+                    } catch (err) {
+                        console.error('备用复制方法失败:', err);
+                        copyBtn.innerHTML = '<i class="fas fa-times"></i> 复制失败';
+                        
+                        setTimeout(function() {
+                            copyBtn.innerHTML = originalText;
+                        }, 2000);
+                    }
+                    
+                    document.body.removeChild(textarea);
                 });
             };
             
