@@ -26,10 +26,12 @@ COPY ./.env .
 
 # 复制热重载脚本
 COPY ./hot_reload.sh /app/hot_reload.sh
-RUN chmod +x /app/hot_reload.sh
+RUN chmod +x /app/hot_reload.sh && \
+    # 确保没有CR字符
+    sed -i 's/\r$//' /app/hot_reload.sh
 
 # 暴露应用端口
 EXPOSE 5000
 
-# 使用热重载脚本启动应用
-CMD ["/app/hot_reload.sh"] 
+# 使用bash启动热重载脚本，而不是直接执行
+CMD ["/bin/bash", "/app/hot_reload.sh"] 

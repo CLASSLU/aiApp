@@ -11,6 +11,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const modelSelect = document.getElementById('model-select');
     const promptSelect = document.getElementById('prompt-select');
     const sessionsList = document.getElementById('sessions-list');
+    const chatContainer = document.getElementById('chat-container');
+    const mainContent = document.querySelector('.main-content'); // 主内容区域
+
+    // 添加全屏切换按钮
+    const fullscreenBtn = document.createElement('button');
+    fullscreenBtn.id = 'fullscreen-btn';
+    fullscreenBtn.className = 'fullscreen-btn';
+    fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+    fullscreenBtn.title = '全屏模式';
+    
+    // 直接添加到body中以确保可见
+    document.body.appendChild(fullscreenBtn);
+    
+    // 全屏状态标志
+    let isFullscreen = false;
 
     // 存储所有会话的数据
     let allSessions = JSON.parse(localStorage.getItem('allChatSessions') || '{}');
@@ -166,7 +181,11 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         breaks: true,
         gfm: true,
-        langPrefix: 'hljs language-'
+        langPrefix: 'hljs language-',
+        headerIds: false,
+        mangle: false,
+        // 禁用自动链接转换，防止代码中的URL被转换
+        smartypants: false
     });
 
     // 显示当前会话的历史记录
@@ -448,27 +467,47 @@ document.addEventListener('DOMContentLoaded', function() {
         handleChat();
     }
 
+    // 处理特殊markdown格式，预处理一些可能导致渲染问题的模式
+    function preprocessMarkdown(markdown) {
+        if (!markdown) return '';
+        
+        // 保护代码块中的内容，防止被错误解析
+        let codeBlocks = [];
+        let processedMarkdown = markdown.replace(/```([a-z]*)\n([\s\S]*?)```/g, function(match, language, code) {
+            // 存储代码块，替换为占位符
+            const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
+            codeBlocks.push({ language, code, placeholder });
+            return placeholder;
+        });
+        
+        // 处理其他可能导致问题的模式
+        // 例如，确保markdown分隔符不会被错误解析
+        processedMarkdown = processedMarkdown
+            .replace(/\[VISION-START\]/g, '\\[VISION-START\\]')
+            .replace(/\[VISION-END\]/g, '\\[VISION-END\\]');
+        
+        // 还原代码块
+        codeBlocks.forEach(block => {
+            processedMarkdown = processedMarkdown.replace(
+                block.placeholder, 
+                '```' + block.language + '\n' + block.code + '```'
+            );
+        });
+        
+        return processedMarkdown;
+    }
+
     function displayMessage(message, role) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${role}`;
         
         if (role === 'ai') {
-            // 配置 marked 选项
-            marked.setOptions({
-                highlight: function(code, lang) {
-                    if (lang && hljs.getLanguage(lang)) {
-                        try {
-                            return hljs.highlight(code, { language: lang }).value;
-                        } catch (err) {}
-                    }
-                    return hljs.highlightAuto(code).value;
-                },
-                breaks: true,
-                gfm: true
-            });
-
-            // 渲染 markdown
-            messageDiv.innerHTML = marked.parse(message);
+            // 预处理markdown内容，处理特殊情况
+            const preprocessedMarkdown = preprocessMarkdown(message);
+            
+            // 渲染markdown
+            const renderedContent = marked.parse(preprocessedMarkdown);
+            messageDiv.innerHTML = renderedContent;
 
             // 为所有代码块添加复制按钮
             messageDiv.querySelectorAll('pre code').forEach(function(block) {
@@ -553,8 +592,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 更新AI响应流式显示
     function updateAIResponse(aiMessageDiv, content) {
-        // 使用 marked 渲染 markdown
-        aiMessageDiv.innerHTML = marked.parse(content);
+        // 预处理markdown内容
+        const preprocessedMarkdown = preprocessMarkdown(content);
+        
+        // 使用完整配置的marked解析，确保代码块正确渲染
+        const renderedContent = marked.parse(preprocessedMarkdown);
+        aiMessageDiv.innerHTML = renderedContent;
         
         // 为所有代码块添加复制按钮
         aiMessageDiv.querySelectorAll('pre code').forEach(function(block) {
@@ -874,6 +917,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     promptSelect.addEventListener('change', applyPromptTemplate);
 
+    // 添加全屏按钮点击事件
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
+
     // 添加输入框自动调整高度
     userInput.addEventListener('input', function() {
         this.style.height = 'auto';
@@ -991,6 +1037,95 @@ document.addEventListener('DOMContentLoaded', function() {
             background-color: rgba(46, 204, 113, 0.7);
         }
 
+        /* 全屏相关样式 */
+        .fullscreen-btn {
+            position: fixed;
+            right: 20px;
+            bottom: 30px;
+            z-index: 10000;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background-color: rgba(61, 90, 254, 0.8);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            font-size: 18px;
+        }
+        
+        .fullscreen-btn:hover {
+            background-color: rgba(61, 90, 254, 1);
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+        }
+        
+        .fullscreen-btn i {
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* 全屏模式样式，保留页头页脚 */
+        body.chat-fullscreen .sidebar {
+            display: none !important;
+        }
+        
+        body.chat-fullscreen .chat-content {
+            width: 100% !important;
+            max-width: 100% !important;
+            padding: 0 !important;
+        }
+        
+        /* 去除页面各部分之间的间距，但保留页头页脚 */
+        .main-content {
+            padding: 0 !important;
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 120px) !important; /* 减去页头页脚的高度 */
+        }
+        
+        .chat-content {
+            flex-grow: 1;
+            padding: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        
+        #chat-container {
+            margin: 0 !important;
+            border-radius: 0 !important;
+            height: 100% !important;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #chat-messages {
+            flex: 1;
+            height: auto !important;
+            overflow-y: auto;
+        }
+        
+        .input-area {
+            padding: 10px !important;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background-color: rgba(30, 34, 42, 0.95);
+        }
+        
+        /* 确保输入区域中的按钮正确显示 */
+        .input-buttons {
+            display: flex;
+            align-items: center;
+            margin-left: 10px;
+        }
+        
+        .input-actions {
+            display: flex;
+            align-items: center;
+        }
+        
         /* 响应式调整 */
         @media (max-width: 768px) {
             .message.user {
@@ -1006,9 +1141,207 @@ document.addEventListener('DOMContentLoaded', function() {
                 height: 22px;
                 font-size: 0.8em;
             }
+            
+            .fullscreen-btn {
+                width: 32px;
+                height: 32px;
+            }
+            
+            .main-content {
+                height: calc(100vh - 100px) !important; /* 移动设备上可能页头页脚更小 */
+            }
+        }
+
+        /* 增强代码块样式 */
+        .code-block-wrapper {
+            margin: 10px 0;
+            border-radius: 6px;
+            overflow: hidden;
+            background-color: #282c34;
+        }
+        
+        .code-block-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #21252b;
+            padding: 5px 10px;
+            border-bottom: 1px solid #181a1f;
+        }
+        
+        .code-lang-tag {
+            font-size: 0.8em;
+            color: #abb2bf;
+        }
+        
+        .copy-button {
+            background-color: transparent;
+            border: 1px solid #4d78cc;
+            color: #4d78cc;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .copy-button:hover {
+            background-color: #4d78cc;
+            color: white;
+        }
+        
+        pre {
+            margin: 0;
+            padding: 15px;
+            overflow-x: auto;
+            background-color: #282c34 !important;
+        }
+        
+        pre code {
+            background-color: transparent !important;
+            padding: 0 !important;
+            border: none !important;
+            white-space: pre-wrap !important;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace !important;
+        }
+        
+        /* 确保代码中的注释文字不会被错误解析 */
+        pre code .hljs-comment {
+            color: #5c6370;
+            font-style: italic;
+        }
+        
+        /* 自定义特殊标记样式 */
+        .message code {
+            background-color: rgba(40, 44, 52, 0.5);
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+        }
+        
+        /* 确保markdown中的表格正确显示 */
+        .message table {
+            border-collapse: collapse;
+            margin: 15px 0;
+            width: 100%;
+        }
+        
+        .message th, .message td {
+            border: 1px solid #4d5666;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        
+        .message th {
+            background-color: #2c313a;
+        }
+        
+        .message tr:nth-child(even) {
+            background-color: #2c313a;
+        }
+        
+        /* 适配响应式布局中的代码块 */
+        @media (max-width: 768px) {
+            .code-block-wrapper {
+                margin: 8px 0;
+            }
+            
+            pre {
+                padding: 10px;
+                font-size: 0.9em;
+            }
+            
+            .code-block-header {
+                padding: 4px 8px;
+            }
+        }
+        
+        /* 确保重发和复制按钮始终可见 */
+        .message.user:hover .message-actions {
+            opacity: 1;
+        }
+        
+        .message-actions {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
         }
     `;
     document.head.appendChild(style);
+
+    // 处理全屏切换
+    function toggleFullscreen() {
+        isFullscreen = !isFullscreen;
+        
+        if (isFullscreen) {
+            // 进入全屏模式
+            document.body.classList.add('chat-fullscreen');
+            fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i>';
+            fullscreenBtn.title = '退出全屏';
+            
+            // 如果存在侧边栏，隐藏它
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar) {
+                sidebar.dataset.originalDisplay = sidebar.style.display || 'block';
+                sidebar.style.display = 'none';
+            }
+            
+            console.log('进入全屏模式');
+        } else {
+            // 退出全屏模式
+            document.body.classList.remove('chat-fullscreen');
+            fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+            fullscreenBtn.title = '全屏模式';
+            
+            // 恢复侧边栏显示
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar) {
+                // 确保使用有效的显示值
+                const originalDisplay = sidebar.dataset.originalDisplay || 'block';
+                sidebar.style.display = originalDisplay !== 'none' ? originalDisplay : 'block';
+                console.log('恢复侧边栏显示:', originalDisplay);
+            }
+            
+            // 确保其他样式恢复
+            const chatContent = document.querySelector('.chat-content');
+            if (chatContent) {
+                // 重置可能被修改的样式
+                chatContent.style.width = '';
+                chatContent.style.maxWidth = '';
+            }
+            
+            console.log('退出全屏模式');
+        }
+        
+        // 重新滚动到底部
+        if (chatMessages) {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        // 等待DOM更新后再次检查样式恢复情况
+        setTimeout(() => {
+            if (!isFullscreen) {
+                const sidebar = document.querySelector('.sidebar');
+                if (sidebar && sidebar.style.display === 'none') {
+                    console.log('强制恢复侧边栏显示');
+                    sidebar.style.display = 'block';
+                }
+            }
+        }, 100);
+    }
+    
+    // 监听ESC键退出全屏
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && isFullscreen) {
+            toggleFullscreen();
+        }
+    });
 
     // 初始化
     fetchModels();
