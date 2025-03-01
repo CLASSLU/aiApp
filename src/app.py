@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, jsonify, request, Response, send_from_directory, stream_with_context
+from flask import Flask, jsonify, request, Response, send_from_directory, stream_with_context, make_response
 from dotenv import load_dotenv
 from flask_cors import CORS
 from .api_client import LoggingSiliconFlowClient
@@ -114,17 +114,30 @@ DEFAULT_MODELS = {
 def create_app():
     app = Flask(__name__)
     
-    # 详细的 CORS 配置
-    CORS(app, resources={
-        r"/api/*": {
-            "origins": "*",  # 允许所有来源
-            "methods": ["GET", "POST", "OPTIONS"],  # 允许的方法
-            "allow_headers": ["Content-Type", "X-Requested-With", "X-Request-Source"],  # 允许的请求头
-            "expose_headers": ["Content-Type", "Content-Length"],  # 暴露的响应头
-            "supports_credentials": True,  # 支持凭证
-            "max_age": 86400  # 预检请求缓存时间（秒）
-        }
-    })
+    # 增强CORS配置（处理所有HTTP方法）
+    @app.after_request
+    def add_cors_headers(response):
+        # 动态设置允许的源（可根据需要修改为具体域名）
+        allowed_origins = [
+            "http://113.45.251.116",
+            "http://localhost:3000"
+        ]
+        origin = request.headers.get('Origin')
+        if origin in allowed_origins:
+            response.headers['Access-Control-Allow-Origin'] = origin
+        else:
+            response.headers['Access-Control-Allow-Origin'] = "*"
+            
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Requested-With, X-Request-Source'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age'] = '86400'
+        return response
+
+    # 显式处理OPTIONS请求
+    @app.route('/api/<path:path>', methods=['OPTIONS'])
+    def handle_options(path):
+        return jsonify({"status": "preflight"}), 200
 
     # 响应日志中间件
     @app.after_request
