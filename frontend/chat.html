@@ -3,323 +3,558 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 助手 - 聊天</title>
-    <link rel="stylesheet" href="assets/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-    <!-- 引入 highlight.js 暗色主题 -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <!-- 引入常用的语言包 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/java.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
-    <!-- 引入 marked -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- 引入配置文件 -->
-    <script src="assets/config.js"></script>
+    <title>AI助手 - 聊天对话</title>
+    <link rel="stylesheet" href="./assets/chat.css">
+    <link rel="stylesheet" href="./assets/prism-dark.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/styles/atom-one-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/languages/python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/languages/javascript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/languages/typescript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/languages/json.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/languages/bash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/languages/html.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/languages/css.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@4.0.0/marked.min.js"></script>
+    <script src="./assets/config.js"></script>
     <style>
-        /* 现有样式保持不变 */
         body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 10px 15px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f5f5f5;
-        }
-        #chat-container {
-            height: calc(100vh - 150px);
-            overflow-y: auto;
-            padding: 12px 15px;
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            margin-bottom: 15px;
-        }
-        .message {
-            margin-bottom: 6px;
-            padding: 4px 8px;
-            border-radius: 8px;
-            max-width: 85%;
-        }
-        .user {
-            background-color: #4A90E2 !important;
-            margin-left: auto;
-            color: white !important;
-        }
-        .ai {
-            background-color: #6bb9ff !important; /* 使用类似用户消息的蓝色，但稍浅 */
-            border: none !important;
-            margin-right: auto;
-            color: white !important; /* 改为白色文字 */
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
-        }
-        .ai p, .ai li, .ai code {
-            color: white !important; /* 确保AI消息中的所有文字都是白色 */
-            margin-top: 3px;
-            margin-bottom: 3px;
-            line-height: 1.5;
-        }
-        .ai a {
-            color: #e8f4ff !important; /* 链接使用浅色 */
-            text-decoration: underline;
-        }
-        .message p {
-            margin-top: 3px;
-            margin-bottom: 3px;
-        }
-        .message ul, .message ol {
-            margin-top: 3px;
-            margin-bottom: 3px;
-            padding-left: 16px;
-        }
-        .message li {
-            margin-bottom: 2px;
-        }
-        .input-container {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
             display: flex;
-            gap: 10px;
+            flex-direction: column;
         }
-        #user-input {
+
+        .app-container {
+            display: flex;
+            flex-direction: row;
             flex: 1;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
+            overflow: hidden;
         }
-        #send-button {
-            padding: 10px 20px;
-            background-color: #1976d2;
+
+        .sidebar {
+            width: 250px;
+            background-color: #2c3e50;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #3d566e;
+        }
+
+        .sidebar-header {
+            padding: 15px;
+            border-bottom: 1px solid #3d566e;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .new-chat-sidebar-btn {
+            background-color: #3498db;
             color: white;
             border: none;
             border-radius: 4px;
+            padding: 5px 10px;
             cursor: pointer;
-        }
-        #send-button:hover {
-            background-color: #1565c0;
+            transition: background-color 0.2s;
         }
 
-        /* 代码块相关样式 */
-        .code-block-wrapper {
-            position: relative;
-            margin: 1em 0;
-            background: #282c34;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        .new-chat-sidebar-btn:hover {
+            background-color: #2980b9;
         }
-        
+
+        .sessions-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 0;
+        }
+
+        .session-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+
+        .session-item.active {
+            background-color: #34495e;
+            border-left: 3px solid #3498db;
+        }
+
+        .session-item:hover:not(.active) {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .session-item.empty {
+            color: #95a5a6;
+            font-style: italic;
+            justify-content: center;
+            cursor: default;
+        }
+
+        .session-title {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .session-actions {
+            display: flex;
+            gap: 5px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .session-item:hover .session-actions {
+            opacity: 1;
+        }
+
+        .rename-session-btn, .delete-session-btn {
+            background: none;
+            border: none;
+            color: #bdc3c7;
+            cursor: pointer;
+            padding: 3px;
+            font-size: 12px;
+            border-radius: 3px;
+            transition: all 0.2s;
+        }
+
+        .rename-session-btn:hover {
+            color: #3498db;
+            background-color: rgba(52, 152, 219, 0.2);
+        }
+
+        .delete-session-btn:hover {
+            color: #e74c3c;
+            background-color: rgba(231, 76, 60, 0.2);
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 100%;
+            margin: 0 auto;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background-color: #fff;
+            border-bottom: 1px solid #e5e5e5;
+        }
+
+        .model-container {
+            display: flex;
+            align-items: center;
+        }
+
+        .model-label {
+            margin-right: 10px;
+            font-weight: 500;
+            color: #34495e;
+        }
+
+        #model-select {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            background-color: #f9f9f9;
+            color: #333;
+            min-width: 200px;
+        }
+
+        .prompt-container {
+            display: flex;
+            align-items: center;
+            margin-left: 20px;
+        }
+
+        .prompt-label {
+            margin-right: 10px;
+            font-weight: 500;
+            color: #34495e;
+        }
+
+        #prompt-select {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            background-color: #f9f9f9;
+            color: #333;
+            min-width: 200px;
+        }
+
+        .new-chat-btn {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 15px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .new-chat-btn:hover {
+            background-color: #2980b9;
+        }
+
+        #chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 85%;
+            position: relative;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+            word-break: break-all;
+            white-space: normal;
+        }
+
+        .message.user {
+            background-color: #e5f7ff;
+            color: #333;
+            margin-left: auto;
+            border-bottom-right-radius: 0;
+        }
+
+        .message.ai {
+            background-color: #2980b9;
+            color: white;
+            margin-right: auto;
+            border-bottom-left-radius: 0;
+        }
+
+        .message.ai a {
+            color: #f1c40f;
+            text-decoration: underline;
+        }
+
+        .message.ai p, .message.ai ul, .message.ai ol, .message.ai h1, .message.ai h2, .message.ai h3, .message.ai h4, .message.ai h5, .message.ai h6, .message.ai hr {
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+        }
+
+        .message.ai ul, .message.ai ol {
+            padding-left: 1.5em;
+        }
+
+        #input-container {
+            display: flex;
+            padding: 15px 20px;
+            background-color: #fff;
+            border-top: 1px solid #e5e5e5;
+            align-items: center;
+            position: relative;
+        }
+
+        #user-input {
+            flex: 1;
+            border: 1px solid #ddd;
+            border-radius: 22px;
+            padding: 12px 15px;
+            font-size: 14px;
+            resize: none;
+            overflow-y: auto;
+            max-height: 150px;
+            min-height: 45px;
+            outline: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) inset;
+            transition: border-color 0.2s;
+        }
+
+        #user-input:focus {
+            border-color: #3498db;
+        }
+
+        #send-button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            margin-left: 10px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+
+        #send-button:hover {
+            background-color: #2980b9;
+        }
+
+        #send-button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        #stop-button {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            margin-left: 10px;
+            cursor: pointer;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+
+        #stop-button:hover {
+            background-color: #c0392b;
+        }
+
+        @media (max-width: 768px) {
+            .app-container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: auto;
+                max-height: 200px;
+            }
+
+            .chat-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .model-container {
+                width: 100%;
+            }
+
+            .prompt-container {
+                margin-left: 0;
+                width: 100%;
+            }
+
+            #model-select, #prompt-select {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .new-chat-btn {
+                margin-top: 10px;
+            }
+        }
+
+        /* 代码块样式 */
+        .code-block-wrapper {
+            margin: 15px 0;
+            border-radius: 5px;
+            overflow: hidden;
+            background-color: #282c34;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
         .code-block-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 16px;
-            background: #21252b;
-            border-radius: 8px 8px 0 0;
+            padding: 8px 12px;
+            background-color: #21252b;
             border-bottom: 1px solid #181a1f;
         }
-        
+
         .code-lang-tag {
-            font-size: 13px;
+            font-size: 12px;
             color: #abb2bf;
-            font-family: 'Fira Code', monospace;
             text-transform: uppercase;
-            font-weight: 500;
-            letter-spacing: 0.5px;
         }
-        
+
         .copy-button {
-            background: transparent;
-            border: 1px solid #4b5263;
-            border-radius: 4px;
+            background: none;
+            border: none;
             color: #abb2bf;
-            padding: 4px 8px;
+            padding: 2px 8px;
             font-size: 12px;
             cursor: pointer;
-            transition: all 0.2s ease;
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 5px;
+            border-radius: 3px;
+            transition: all 0.2s;
         }
-        
+
         .copy-button:hover {
-            background: #4b5263;
+            background-color: #3a404d;
             color: #fff;
         }
-        
-        .copy-button i {
-            font-size: 14px;
-        }
-        
-        .code-block-wrapper pre {
+
+        pre {
             margin: 0;
-            padding: 16px;
+            padding: 12px;
+            border-radius: 0 0 5px 5px;
             overflow-x: auto;
-            background: transparent;
+            background-color: #282c34;
         }
-        
-        .code-block-wrapper code {
+
+        pre code {
             font-family: 'Fira Code', monospace;
             font-size: 14px;
             line-height: 1.5;
-            color: #abb2bf;
+            padding: 0;
         }
-        
-        /* AI消息中的代码块样式覆盖 */
-        .ai .code-block-wrapper {
-            background: rgba(255, 255, 255, 0.15) !important; /* 半透明白色背景 */
-            border-radius: 6px !important;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
-            margin: 10px 0 !important;
-        }
-        
-        .ai .code-block-header {
-            background: rgba(0, 0, 0, 0.2) !important; /* 深色标题栏 */
-            border-radius: 6px 6px 0 0 !important;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-        }
-        
-        .ai .code-lang-tag {
-            color: rgba(255, 255, 255, 0.9) !important; /* 更明亮的标签文本 */
-        }
-        
-        .ai .copy-button {
-            background: transparent !important;
-            border: 1px solid rgba(255, 255, 255, 0.3) !important;
-            color: rgba(255, 255, 255, 0.8) !important;
-        }
-        
-        .ai .copy-button:hover {
-            background: rgba(255, 255, 255, 0.2) !important;
-        }
-        
-        /* 代码高亮自定义 */
-        .hljs {
-            background: transparent !important;
-            padding: 0 !important;
-            color: #abb2bf;
-        }
-        
-        .hljs-keyword {
-            color: #c678dd;
-        }
-        
-        .hljs-type {
-            color: #e5c07b;
-        }
-        
-        .hljs-string {
-            color: #98c379;
-        }
-        
-        .hljs-number {
-            color: #d19a66;
-        }
-        
-        .hljs-comment {
-            color: #5c6370;
-            font-style: italic;
-        }
-        
-        .hljs-function {
-            color: #61afef;
-        }
-        
-        .hljs-title {
-            color: #61afef;
-        }
-        
-        .hljs-params {
-            color: #abb2bf;
-        }
-        
+
         /* 滚动条样式 */
-        .code-block-wrapper pre::-webkit-scrollbar {
+        pre::-webkit-scrollbar {
             height: 8px;
+        }
+
+        pre::-webkit-scrollbar-track {
             background: #282c34;
         }
-        
-        .code-block-wrapper pre::-webkit-scrollbar-thumb {
-            background: #4b5263;
+
+        pre::-webkit-scrollbar-thumb {
+            background: #3a404d;
             border-radius: 4px;
         }
-        
-        .code-block-wrapper pre::-webkit-scrollbar-thumb:hover {
-            background: #5c6370;
+
+        pre::-webkit-scrollbar-thumb:hover {
+            background: #4a5060;
         }
-        
-        /* 代码块动画效果 */
+
+        /* 代码块动画 */
         .code-block-wrapper {
             transition: transform 0.2s ease;
         }
-        
+
         .code-block-wrapper:hover {
             transform: translateY(-2px);
         }
-        
-        /* Markdown 内容样式优化 */
-        .ai p {
-            margin: 0.8em 0;
-            line-height: 1.6;
-            color: #333;
+
+        /* 优化Markdown内容 */
+        .message.ai p, .message.ai ul, .message.ai ol {
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
         }
-        
-        .ai h1, .ai h2, .ai h3 {
-            margin-top: 1.2em;
-            margin-bottom: 0.8em;
-            color: #222;
+
+        .message.ai h1, .message.ai h2, .message.ai h3, .message.ai h4 {
+            margin-top: 0.8em;
+            margin-bottom: 0.5em;
+            color: #ffffff;
         }
-        
-        .ai ul, .ai ol {
-            padding-left: 1.5em;
-            margin: 0.8em 0;
-        }
-        
-        .ai li {
-            margin: 0.4em 0;
-        }
-        
-        .ai hr {
+
+        .message.ai hr {
             border: none;
-            border-top: 2px solid #eee;
-            margin: 1.5em 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            margin: 1em 0;
         }
     </style>
 </head>
 <body>
-    <header>
-        <div class="logo">AI</div>
+    <header class="main-header">
+        <div class="logo">
+            <a href="/">
+                <img src="./assets/logo.png" alt="AI助手" height="30">
+            </a>
+        </div>
         <nav>
-            <ul>
-                <li><a href="index.html">主页</a></li>
-                <li><a href="chat.html">聊天功能</a></li>
-                <li><a href="generate.html">图像生成</a></li>
-            </ul>
+            <a href="index.html">首页</a>
+            <a href="chat.html" class="active">对话</a>
+            <a href="generate.html">生成图像</a>
         </nav>
     </header>
 
-    <div class="main-content">
-        <div class="chat-container">
-            <div class="chat-header">
-                <button class="new-chat-btn">
-                    <i class="fas fa-plus"></i> 新建会话
+    <div class="app-container">
+        <!-- 侧边栏: 会话列表 -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">会话列表</div>
+                <button class="new-chat-sidebar-btn">
+                    <i class="fas fa-plus"></i> 新建
                 </button>
-                <select id="model-select" class="model-select">
-                    <option value="">加载中...</option>
-                </select>
             </div>
-            <div id="chat-messages" class="chat-messages"></div>
-            <div class="chat-input">
-                <textarea id="user-input" placeholder="输入消息..."></textarea>
-                <button id="send-button">发送</button>
-                <button id="stop-button" style="display: none;">停止</button>
+            <div class="sessions-container">
+                <ul id="sessions-list" class="sessions-list"></ul>
+            </div>
+        </div>
+
+        <!-- 主要聊天区域 -->
+        <div class="main-content">
+            <div id="chat-container">
+                <div class="chat-header">
+                    <div class="header-controls">
+                        <div class="model-container">
+                            <span class="model-label">模型:</span>
+                            <select id="model-select"></select>
+                        </div>
+                        <div class="prompt-container">
+                            <span class="prompt-label">场景:</span>
+                            <select id="prompt-select">
+                                <option value="">- 选择场景提示词 -</option>
+                                <option value="programmer">程序员</option>
+                                <option value="product_manager">产品经理</option>
+                                <option value="doctor">医疗咨询</option>
+                                <option value="civil_servant">公务员</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="new-chat-btn">
+                        <i class="fas fa-plus"></i> 新建对话
+                    </button>
+                </div>
+                <div id="chat-messages"></div>
+                <div id="input-container">
+                    <textarea id="user-input" placeholder="输入消息，Shift+Enter换行..." rows="1"></textarea>
+                    <button id="send-button">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                    <button id="stop-button">
+                        <i class="fas fa-stop"></i>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
     <footer>
-        <p>© 2025 AI 多功能平台. 袁路保留所有权利。</p>
+        <p>&copy; 2023 AI助手平台 保留所有权利</p>
     </footer>
 
-    <script src="assets/chat.js"></script>
+    <script src="./assets/chat.js"></script>
 </body>
 </html>

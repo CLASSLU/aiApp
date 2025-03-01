@@ -48,24 +48,54 @@ function showResults(images) {
     });
     
     // 添加下载事件监听
-    $('.btn-download').click(function() {
-        var url = encodeURIComponent($(this).data('url'));
-        fetchApi(endpoints.download + '?url=' + url).then(function(response) {
-            return response.blob();
-        }).then(function(blob) {
-            var downloadUrl = window.URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = downloadUrl;
-            a.download = url.split('/').pop() || 'generated-image.png';
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(downloadUrl);
-            document.body.removeChild(a);
-        }).catch(function(error) {
-            console.error('下载出错:', error);
-            showError('下载失败，请重试');
-        });
+    $('.btn-download').click(function(e) {
+        e.preventDefault();
+        var imgUrl = $(this).data('url');
+        downloadImage(imgUrl);
     });
+}
+
+// 统一的图片下载函数
+async function downloadImage(imgUrl) {
+    try {
+        // 显示下载中的状态
+        showError('正在准备下载...');
+        
+        // 创建一个隐藏的 iframe 来处理下载
+        // 这样可以避免跨域问题并直接触发浏览器的下载行为
+        const downloadUrl = `${API_BASE_URL}/api/download?url=${encodeURIComponent(imgUrl)}`;
+        
+        // 方法1：使用窗口打开方式（最简单可靠）
+        window.open(downloadUrl, '_blank');
+        
+        // 更新状态
+        showError('下载已开始，请检查您的下载文件夹');
+    } catch (error) {
+        console.error('下载出错:', error);
+        showError('下载失败，请重试');
+    }
+}
+
+// 添加下载按钮到图片旁边
+function addDownloadButton(imgUrl) {
+    const img = document.createElement('img');
+    img.src = imgUrl;
+    
+    const downloadBtn = document.createElement('a');
+    downloadBtn.href = '#';
+    downloadBtn.className = 'download-btn';
+    downloadBtn.innerHTML = '<i class="fas fa-download"></i>';
+    downloadBtn.onclick = (e) => {
+        e.preventDefault();
+        downloadImage(imgUrl);
+    };
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'image-wrapper';
+    wrapper.appendChild(img);
+    wrapper.appendChild(downloadBtn);
+    
+    document.getElementById('result').appendChild(wrapper);
 }
 
 $(document).ready(function() {
@@ -232,45 +262,6 @@ document.getElementById('prompt').addEventListener('keypress', function (event) 
         document.getElementById('generateBtn').click(); // 触发生成按钮的点击事件
     }
 });
-
-// 添加下载按钮到图片旁边
-function addDownloadButton(imgUrl) {
-    const img = document.createElement('img');
-    img.src = imgUrl;
-    
-    const downloadBtn = document.createElement('a');
-    downloadBtn.href = imgUrl;
-    downloadBtn.className = 'download-btn';
-    downloadBtn.innerHTML = '<i class="fas fa-download"></i>';
-    downloadBtn.setAttribute('download', '');
-    downloadBtn.onclick = async (e) => {
-        e.preventDefault();
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/download?url=${encodeURIComponent(imgUrl)}`);
-            if (!response.ok) throw new Error('下载失败');
-            
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = imgUrl.split('/').pop() || 'generated-image.png';
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-        } catch (error) {
-            console.error('下载出错:', error);
-            alert('下载失败，请重试');
-        }
-    };
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'image-wrapper';
-    wrapper.appendChild(img);
-    wrapper.appendChild(downloadBtn);
-    
-    document.getElementById('result').appendChild(wrapper);
-}
 
 // 更新生成图片的显示方式
 function displayImages(images) {
