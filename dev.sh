@@ -11,13 +11,21 @@ NC='\033[0m' # No Color
 check_script_format() {
     local script=$1
     if [ -f "$script" ]; then
+        # 检查和修复行尾
         if grep -q $'\r' "$script" 2>/dev/null; then
             echo -e "${YELLOW}警告: 脚本 $script 包含Windows风格换行符，正在修复...${NC}"
             sed -i 's/\r$//' "$script"
-            echo -e "${GREEN}修复完成${NC}"
+            echo -e "${GREEN}行尾修复完成${NC}"
+        fi
+        
+        # 修复执行权限
+        if [ ! -x "$script" ]; then
+            echo -e "${YELLOW}警告: 脚本 $script 缺少执行权限，正在修复...${NC}"
+            chmod +x "$script"
+            echo -e "${GREEN}权限修复完成${NC}"
         fi
     else
-        echo -e "${YELLOW}警告: 脚本 $script 不存在，跳过格式检查${NC}"
+        echo -e "${YELLOW}警告: 脚本 $script 不存在，跳过检查${NC}"
     fi
 }
 
