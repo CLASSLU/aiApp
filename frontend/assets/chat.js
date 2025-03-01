@@ -253,154 +253,197 @@ document.addEventListener('DOMContentLoaded', function() {
         aiMessageDiv.className = 'message ai';
         chatMessages.appendChild(aiMessageDiv);
         
-        // 构造请求 URL 和参数
-        const params = new URLSearchParams({
+        // 使用POST请求而不是GET请求
+        const requestData = {
             session_id: sessionId,
             user_input: userInput
-        });
+        };
         
-        // 创建 EventSource 连接
-        const eventSource = new EventSource(`${API_BASE_URL}${endpoints.chat}?${params.toString()}`);
+        // 创建 EventSource 连接 - 使用POST请求
+        const eventSourceUrl = `${API_BASE_URL}${endpoints.chat}`;
         
-        let accumulatedContent = '';
-        let inCodeBlock = false;
-        let currentLang = '';
-        let codeBlockContent = '';
-        let currentCodeBlock = null;
-        let currentPre = null;
-        
-        eventSource.onmessage = function(event) {
-            if (event.data === '[DONE]') {
-                // 将 AI 回复添加到历史记录
-                if (accumulatedContent) {
-                    const aiMessage = { role: 'assistant', content: accumulatedContent };
-                    messageHistory.push(aiMessage);
-                    localStorage.setItem('messageHistory', JSON.stringify(messageHistory));
-                }
-                eventSource.close();
-                return;
+        // 先发送POST请求获取流式响应
+        fetch(eventSourceUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        }).then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
             
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'user') {
-                    // 忽略用户消息，因为我们已经显示过了
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            
+            let accumulatedContent = '';
+            let inCodeBlock = false;
+            let currentLang = '';
+            let codeBlockContent = '';
+            let currentCodeBlock = null;
+            let currentPre = null;
+            
+            function processChunk({ done, value }) {
+                if (done) {
+                    // 将 AI 回复添加到历史记录
+                    if (accumulatedContent) {
+                        const aiMessage = { role: 'assistant', content: accumulatedContent };
+                        messageHistory.push(aiMessage);
+                        localStorage.setItem('messageHistory', JSON.stringify(messageHistory));
+                    }
                     return;
                 }
-                if (data.reply) {
-                    const content = data.reply;
-                    accumulatedContent += content;
+                
+                // 解码二进制数据
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+                
+                // 处理SSE格式的数据
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop(); // 保留最后一个可能不完整的行
+                
+                for (const line of lines) {
+                    if (!line.trim() || !line.startsWith('data: ')) continue;
                     
-                    // 检测代码块的开始
-                    if (content.includes('```') && !inCodeBlock) {
-                        inCodeBlock = true;
-                        const parts = content.split('```');
-                        if (parts[0]) {
-                            // 渲染代码块前的内容
-                            aiMessageDiv.innerHTML = marked.parse(accumulatedContent.slice(0, -content.length) + parts[0]);
+                    const eventData = line.slice(6); // 移除 'data: ' 前缀
+                    
+                    if (eventData === '[DONE]') {
+                        // 将 AI 回复添加到历史记录
+                        if (accumulatedContent) {
+                            const aiMessage = { role: 'assistant', content: accumulatedContent };
+                            messageHistory.push(aiMessage);
+                            localStorage.setItem('messageHistory', JSON.stringify(messageHistory));
                         }
-                        
-                        // 创建新的代码块容器
-                        currentPre = document.createElement('pre');
-                        currentCodeBlock = document.createElement('code');
-                        currentPre.appendChild(currentCodeBlock);
-                        
-                        // 获取语言
-                        const langMatch = parts[1].match(/^(\w+)\n/);
-                        if (langMatch) {
-                            currentLang = langMatch[1].toUpperCase();
-                            currentCodeBlock.className = 'language-' + langMatch[1].toLowerCase();
-                            content = parts[1].slice(langMatch[0].length);
-                        } else {
-                            currentLang = 'TEXT';
-                            currentCodeBlock.className = 'language-text';
-                            content = parts[1];
-                        }
-                        
-                        // 创建代码块包装器
-                        const wrapper = document.createElement('div');
-                        wrapper.className = 'code-block-wrapper';
-                        
-                        const header = document.createElement('div');
-                        header.className = 'code-block-header';
-                        
-                        const langTag = document.createElement('div');
-                        langTag.className = 'code-lang-tag';
-                        langTag.textContent = currentLang;
-                        header.appendChild(langTag);
-                        
-                        const copyButton = document.createElement('button');
-                        copyButton.className = 'copy-button';
-                        copyButton.innerHTML = '<i class="fas fa-copy"></i>';
-                        copyButton.title = '复制代码';
-                        
-                        copyButton.addEventListener('click', function() {
-                            const code = currentCodeBlock.textContent;
-                            navigator.clipboard.writeText(code).then(function() {
-                                copyButton.innerHTML = '<i class="fas fa-check"></i>';
-                                setTimeout(function() {
-                                    copyButton.innerHTML = '<i class="fas fa-copy"></i>';
-                                }, 2000);
-                            }).catch(function(err) {
-                                console.error('复制失败:', err);
-                                copyButton.innerHTML = '<i class="fas fa-times"></i>';
-                            });
-                        });
-                        
-                        header.appendChild(copyButton);
-                        wrapper.appendChild(header);
-                        wrapper.appendChild(currentPre);
-                        aiMessageDiv.appendChild(wrapper);
-                        
-                        codeBlockContent = content;
-                        currentCodeBlock.textContent = content;
-                        hljs.highlightElement(currentCodeBlock);
+                        return;
                     }
-                    // 检测代码块的结束
-                    else if (content.includes('```') && inCodeBlock) {
-                        inCodeBlock = false;
-                        const parts = content.split('```');
-                        if (parts[0]) {
-                            codeBlockContent += parts[0];
-                            currentCodeBlock.textContent = codeBlockContent;
-                            hljs.highlightElement(currentCodeBlock);
+                    
+                    try {
+                        const data = JSON.parse(eventData);
+                        if (data.type === 'user') {
+                            // 忽略用户消息，因为我们已经显示过了
+                            continue;
                         }
-                        if (parts[1]) {
-                            // 渲染代码块后的内容
-                            const tempDiv = document.createElement('div');
-                            tempDiv.innerHTML = marked.parse(parts[1]);
-                            while (tempDiv.firstChild) {
-                                aiMessageDiv.appendChild(tempDiv.firstChild);
+                        if (data.reply) {
+                            const content = data.reply;
+                            accumulatedContent += content;
+                            
+                            // 检测代码块的开始
+                            if (content.includes('```') && !inCodeBlock) {
+                                inCodeBlock = true;
+                                const parts = content.split('```');
+                                if (parts[0]) {
+                                    // 渲染代码块前的内容
+                                    aiMessageDiv.innerHTML = marked.parse(accumulatedContent.slice(0, -content.length) + parts[0]);
+                                }
+                                
+                                // 创建新的代码块容器
+                                currentPre = document.createElement('pre');
+                                currentCodeBlock = document.createElement('code');
+                                currentPre.appendChild(currentCodeBlock);
+                                
+                                // 获取语言
+                                const langMatch = parts[1].match(/^(\w+)\n/);
+                                if (langMatch) {
+                                    currentLang = langMatch[1].toUpperCase();
+                                    currentCodeBlock.className = 'language-' + langMatch[1].toLowerCase();
+                                    content = parts[1].slice(langMatch[0].length);
+                                } else {
+                                    currentLang = 'TEXT';
+                                    currentCodeBlock.className = 'language-text';
+                                    content = parts[1];
+                                }
+                                
+                                // 创建代码块包装器
+                                const wrapper = document.createElement('div');
+                                wrapper.className = 'code-block-wrapper';
+                                
+                                const header = document.createElement('div');
+                                header.className = 'code-block-header';
+                                
+                                const langTag = document.createElement('div');
+                                langTag.className = 'code-lang-tag';
+                                langTag.textContent = currentLang;
+                                header.appendChild(langTag);
+                                
+                                const copyButton = document.createElement('button');
+                                copyButton.className = 'copy-button';
+                                copyButton.innerHTML = '<i class="fas fa-copy"></i>';
+                                copyButton.title = '复制代码';
+                                
+                                copyButton.addEventListener('click', function() {
+                                    const code = currentCodeBlock.textContent;
+                                    navigator.clipboard.writeText(code).then(function() {
+                                        copyButton.innerHTML = '<i class="fas fa-check"></i>';
+                                        setTimeout(function() {
+                                            copyButton.innerHTML = '<i class="fas fa-copy"></i>';
+                                        }, 2000);
+                                    }).catch(function(err) {
+                                        console.error('复制失败:', err);
+                                        copyButton.innerHTML = '<i class="fas fa-times"></i>';
+                                    });
+                                });
+                                
+                                header.appendChild(copyButton);
+                                wrapper.appendChild(header);
+                                wrapper.appendChild(currentPre);
+                                aiMessageDiv.appendChild(wrapper);
+                                
+                                codeBlockContent = content;
+                                currentCodeBlock.textContent = content;
+                                hljs.highlightElement(currentCodeBlock);
                             }
+                            // 检测代码块的结束
+                            else if (content.includes('```') && inCodeBlock) {
+                                inCodeBlock = false;
+                                const parts = content.split('```');
+                                if (parts[0]) {
+                                    codeBlockContent += parts[0];
+                                    currentCodeBlock.textContent = codeBlockContent;
+                                    hljs.highlightElement(currentCodeBlock);
+                                }
+                                if (parts[1]) {
+                                    // 渲染代码块后的内容
+                                    const tempDiv = document.createElement('div');
+                                    tempDiv.innerHTML = marked.parse(parts[1]);
+                                    while (tempDiv.firstChild) {
+                                        aiMessageDiv.appendChild(tempDiv.firstChild);
+                                    }
+                                }
+                                currentCodeBlock = null;
+                                currentPre = null;
+                                codeBlockContent = '';
+                            }
+                            // 在代码块内
+                            else if (inCodeBlock) {
+                                codeBlockContent += content;
+                                currentCodeBlock.textContent = codeBlockContent;
+                                hljs.highlightElement(currentCodeBlock);
+                            }
+                            // 普通文本
+                            else {
+                                aiMessageDiv.innerHTML = marked.parse(accumulatedContent);
+                            }
+                            
+                            // 滚动到底部
+                            chatMessages.scrollTop = chatMessages.scrollHeight;
                         }
-                        currentCodeBlock = null;
-                        currentPre = null;
-                        codeBlockContent = '';
+                    } catch (error) {
+                        console.error('处理消息时出错:', error);
                     }
-                    // 在代码块内
-                    else if (inCodeBlock) {
-                        codeBlockContent += content;
-                        currentCodeBlock.textContent = codeBlockContent;
-                        hljs.highlightElement(currentCodeBlock);
-                    }
-                    // 普通文本
-                    else {
-                        aiMessageDiv.innerHTML = marked.parse(accumulatedContent);
-                    }
-                    
-                    // 滚动到底部
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
                 }
-            } catch (error) {
-                console.error('处理消息时出错:', error);
+                
+                // 继续读取下一个数据块
+                return reader.read().then(processChunk);
             }
-        };
-        
-        eventSource.onerror = function(error) {
-            console.error('EventSource 错误:', error);
-            eventSource.close();
-            displayMessage('抱歉，发生了错误，请重试。', 'ai');
-        };
+            
+            // 开始读取流
+            return reader.read().then(processChunk);
+        }).catch(error => {
+            console.error('聊天请求失败:', error);
+            aiMessageDiv.innerHTML = `<p class="error">发生错误: ${error.message}</p>`;
+        });
     }
 
     // 更新模型选择框的函数

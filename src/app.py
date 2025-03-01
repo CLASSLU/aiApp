@@ -114,8 +114,17 @@ DEFAULT_MODELS = {
 def create_app():
     app = Flask(__name__)
     
-    # 使用最简单的 CORS 配置
-    CORS(app)
+    # 详细的 CORS 配置
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": "*",  # 允许所有来源
+            "methods": ["GET", "POST", "OPTIONS"],  # 允许的方法
+            "allow_headers": ["Content-Type", "X-Requested-With", "X-Request-Source"],  # 允许的请求头
+            "expose_headers": ["Content-Type", "Content-Length"],  # 暴露的响应头
+            "supports_credentials": True,  # 支持凭证
+            "max_age": 86400  # 预检请求缓存时间（秒）
+        }
+    })
 
     # 响应日志中间件
     @app.after_request

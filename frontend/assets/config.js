@@ -17,7 +17,7 @@
     }
 
     // 获取API基础URL
-    const API_BASE_URL = getApiBaseUrl()+':5000';
+    const API_BASE_URL = getApiBaseUrl();
 
     // API端点配置
     const endpoints = {
@@ -35,7 +35,8 @@
                 'Content-Type': 'application/json',
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            credentials: 'same-origin'  // 同源请求
+            credentials: 'include',  // 改为include以支持跨域请求
+            mode: 'cors'  // 明确指定CORS模式
         };
         
         // 确保合并后的 headers 包含 Content-Type
