@@ -4,9 +4,15 @@
     const getApiBaseUrl = () => {
         // 获取当前主机名和端口
         const hostname = window.location.hostname;
+        const protocol = window.location.protocol;
         
-        // 直接使用当前主机的API路径，通过nginx反向代理
-        return '';  // 空字符串表示相对路径，这样API请求会发送到同一域名下
+        // 获取当前域名和端口
+        const currentUrl = `${protocol}//${hostname}${window.location.port ? ':' + window.location.port : ''}`;
+        
+        console.log('当前访问地址:', currentUrl);
+        
+        // 使用相对路径，通过nginx代理访问API
+        return '';
     };
 
     // 获取API基础URL
@@ -43,8 +49,17 @@
         };
         
         try {
+            // 添加请求超时处理
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
+            
+            if (!finalOptions.signal) {
+                finalOptions.signal = controller.signal;
+            }
+            
             // 发送请求
             const response = await fetch(url, finalOptions);
+            clearTimeout(timeoutId); // 清除超时
             
             // 检查响应状态
             if (!response.ok) {
@@ -56,6 +71,11 @@
             
             return response;
         } catch (error) {
+            if (error.name === 'AbortError') {
+                console.error('API请求超时');
+                throw new Error('API请求超时，请稍后重试');
+            }
+            
             console.error('API请求失败:', error);
             throw error;
         }
