@@ -18,6 +18,11 @@ from threading import Event
 import uuid
 import sys
 
+# 初始化全局日志器
+logger = logging.getLogger(__name__)
+api_logger = logging.getLogger('api')
+chat_logger = logging.getLogger('chat')
+
 # 加载环境变量
 load_dotenv()
 
@@ -106,8 +111,6 @@ logging_config = {
 
 # 应用日志配置
 logging.config.dictConfig(logging_config)
-logger = logging.getLogger(__name__)
-
 logger.info("应用启动中...")
 
 # 创建 Flask 应用
@@ -169,7 +172,7 @@ def trim_chat_history(session_id):
         # 保留最新的消息
         chat_histories[session_id] = chat_histories[session_id][-CHAT_CONFIG['max_history_length']:]
 
-# 添加默认模型列表
+# 全局变量
 DEFAULT_MODELS = {
     "models": [
         {
@@ -445,9 +448,6 @@ def create_app():
         """处理用户的聊天请求"""
         start_time = time.time()
         
-        # 创建专门的聊天日志记录器
-        chat_logger = logging.getLogger('chat')
-        
         try:
             if request.method == 'GET':
                 session_id = request.args.get('session_id')
@@ -678,7 +678,12 @@ def create_app():
     @app.route('/api/models', methods=['GET'])
     def get_models():
         """获取可用模型列表"""
-        return jsonify(DEFAULT_MODELS)
+        try:
+            logger.info("请求获取模型列表")
+            return jsonify(DEFAULT_MODELS)
+        except Exception as e:
+            logger.error(f"获取模型列表失败: {str(e)}", exc_info=True)
+            return jsonify({"error": "获取模型列表失败", "detail": str(e)}), 500
 
     @app.route('/static/<path:filename>')
     def serve_static(filename):
@@ -701,13 +706,12 @@ def create_app():
     def health_check():
         """健康检查接口"""
         logger.debug("健康检查请求")
-        return jsonify({"status": "ok", "timestamp": datetime.datetime.now().isoformat()})
+        return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
 
     @app.route('/api/logs/<log_type>/download', methods=['GET'])
     def download_log(log_type):
         """下载指定类型的日志文件"""
         # 获取API日志记录器
-        api_logger = logging.getLogger('api')
         api_logger.info(f"请求下载日志文件: {log_type}")
         
         # 验证日志类型
@@ -744,7 +748,6 @@ def create_app():
     def get_logs(log_type):
         """获取指定类型的日志文件内容"""
         # 获取API日志记录器用于记录此API自身的调用
-        api_logger = logging.getLogger('api')
         api_logger.info(f"请求获取日志文件: {log_type}")
         
         # 验证日志类型
