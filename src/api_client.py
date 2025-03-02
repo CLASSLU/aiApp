@@ -33,43 +33,98 @@ class SiliconFlowClient:
         logger.info("SiliconFlow客户端初始化完成，版本：1.2.0")
 
     def generate_image(self, payload, custom_headers=None):
-        logger.info("进入generate_image方法")
-        """调用生图API"""
-        headers = {**self.headers, **(custom_headers or {})}
-        
-        # 硅流API要求的参数结构
-        formatted_payload = {
-            "model": payload["model"],
-            "prompt": payload["prompt"],
-            "width": int(payload["width"]),
-            "height": int(payload["height"]),
-            "batch_size": payload["batch_size"],
-            "num_inference_steps": 4,
-            "guidance_scale": 4.0,
-            "use_fast_sampler": True,
-            "variation_seed": payload.get("variation_seed", 0),
-            "variation_strength": 0.7
-        }
+        """调用SiliconFlow API生成图像。
+
+        Args:
+            payload: 包含请求参数的字典，必须包含:
+                model: 模型名称
+                prompt: 图像生成提示词
+                width, height: 图像尺寸
+                batch_size: 要生成的图像数量
+                其他可选参数
+            custom_headers: 可选的自定义HTTP头信息
+
+        Returns:
+            dict: 包含图像URL的响应数据或错误信息
+        """
+        logger.debug("进入generate_image方法")
         
         try:
-           
+            # 检查API密钥是否存在
+            if not self.headers.get("Authorization"):
+                logger.error("缺少API密钥，无法进行图像生成")
+                return {"error": "缺少API密钥", "images": []}
+                
+            # 构造请求头
+            headers = {**self.headers, **(custom_headers or {})}
+            
+            # 记录请求信息
+            api_url = f"{self.base_url}/images/generations"
+            logger.debug(f"图像生成API请求URL: {api_url}")
+            
+            # 构造请求负载
+            formatted_payload = {
+                "model": payload.get("model", "black-forest-labs/FLUX.1-schnell"),
+                "prompt": payload.get("prompt", ""),
+                "width": payload.get("width", 1024),
+                "height": payload.get("height", 1024),
+                "batch_size": payload.get("batch_size", 1),
+                "num_inference_steps": payload.get("num_inference_steps", 20),
+                "guidance_scale": payload.get("guidance_scale", 7.5),
+                "use_fast_sampler": payload.get("use_fast_sampler", True),
+                "variation_seed": payload.get("variation_seed", 0),
+                "variation_strength": payload.get("variation_strength", 0.0),
+            }
+            
+            # 记录请求参数
+            logger.debug(f"图像生成请求参数: {json.dumps(formatted_payload, ensure_ascii=False)}")
+            
+            # 发起POST请求
+            logger.info(f"正在调用图像生成API，模型: {formatted_payload['model']}, 提示词: '{formatted_payload['prompt'][:50]}...'")
             response = requests.post(
-                f"{self.base_url}/images/generations",
+                api_url,
                 headers=headers,
                 json=formatted_payload,
-                timeout=self.timeout
+                timeout=60  # 增加超时时间到60秒
             )
+            
+            # 检查HTTP状态码
+            if response.status_code != 200:
+                logger.error(f"API请求失败，状态码: {response.status_code}, 响应: {response.text[:500]}")
+                return {"error": f"API请求失败 (HTTP {response.status_code}): {response.text[:100]}", "images": []}
+            
+            # 解析响应
+            try:
+                data = response.json()
+                logger.debug(f"API响应成功，数据大小: {len(str(data))} 字节")
+                
+                # 验证响应中是否有图像
+                if not data.get("data") or len(data["data"]) == 0:
+                    logger.warning("API响应中没有图像数据")
+                    return {"error": "API响应中没有图像数据", "images": []}
                     
-            response.raise_for_status()
-            response_data = response.json()
-            
-            return {
-                "images": [{"url": img["url"] for img in response_data.get('data', [])}],
-                "credits_used": response_data.get('credits_used', 0)
-            }
-        except requests.exceptions.RequestException as e:
-            
-            raise
+                logger.info(f"成功生成 {len(data.get('data', []))} 张图像")
+                return {
+                    "images": [{"url": img["url"]} for img in data.get('data', [])],
+                    "credits_used": data.get('credits_used', 0)
+                }
+            except ValueError as e:
+                logger.error(f"无法解析API响应为JSON: {str(e)}", exc_info=True)
+                logger.error(f"原始响应: {response.text[:500]}")
+                return {"error": "无法解析API响应", "images": []}
+                
+        except requests.exceptions.ConnectTimeout as e:
+            logger.error(f"连接API超时: {str(e)}", exc_info=True)
+            return {"error": "连接API服务器超时，请检查网络连接和API服务器状态", "images": []}
+        except requests.exceptions.ReadTimeout as e:
+            logger.error(f"读取API响应超时: {str(e)}", exc_info=True)
+            return {"error": "等待API响应超时，可能是由于图像生成耗时过长或服务器繁忙", "images": []}
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"连接API服务器错误: {str(e)}", exc_info=True)
+            return {"error": "无法连接到API服务器，请检查网络连接和API服务器地址", "images": []}
+        except Exception as e:
+            logger.error(f"图像生成过程中发生未预期的错误: {str(e)}", exc_info=True)
+            return {"error": f"图像生成失败: {str(e)}", "images": []}
 
     def _check_model_access(self):
         check_url = f"{self.base_url}/models/{self.model_path}"
@@ -286,44 +341,98 @@ class LoggingSiliconFlowClient:
             self._current_request = None
 
     def generate_image(self, payload, custom_headers=None):
+        """调用SiliconFlow API生成图像。
+
+        Args:
+            payload: 包含请求参数的字典，必须包含:
+                model: 模型名称
+                prompt: 图像生成提示词
+                width, height: 图像尺寸
+                batch_size: 要生成的图像数量
+                其他可选参数
+            custom_headers: 可选的自定义HTTP头信息
+
+        Returns:
+            dict: 包含图像URL的响应数据或错误信息
+        """
         logger.debug("进入generate_image方法")
-        """调用生图API"""
-        headers = {**self.headers, **(custom_headers or {})}
-        logger.info(f"生图请求头: {headers}")
-        # 硅流API要求的参数结构
-        formatted_payload = {
-            "model": payload["model"],
-            "prompt": payload["prompt"],
-            "width": int(payload["width"]),
-            "height": int(payload["height"]),
-            "batch_size": payload["batch_size"],
-            "num_inference_steps": 4,
-            "guidance_scale": 4.0,
-            "use_fast_sampler": True,
-            "variation_seed": payload.get("variation_seed", 0),
-            "variation_strength": 0.7
-        }
-        logger.info(f"生图请求参数: {formatted_payload}")
         
         try:
-           
+            # 检查API密钥是否存在
+            if not self.headers.get("Authorization"):
+                logger.error("缺少API密钥，无法进行图像生成")
+                return {"error": "缺少API密钥", "images": []}
+                
+            # 构造请求头
+            headers = {**self.headers, **(custom_headers or {})}
+            
+            # 记录请求信息
+            api_url = f"{self.base_url}/images/generations"
+            logger.debug(f"图像生成API请求URL: {api_url}")
+            
+            # 构造请求负载
+            formatted_payload = {
+                "model": payload.get("model", "black-forest-labs/FLUX.1-schnell"),
+                "prompt": payload.get("prompt", ""),
+                "width": payload.get("width", 1024),
+                "height": payload.get("height", 1024),
+                "batch_size": payload.get("batch_size", 1),
+                "num_inference_steps": payload.get("num_inference_steps", 20),
+                "guidance_scale": payload.get("guidance_scale", 7.5),
+                "use_fast_sampler": payload.get("use_fast_sampler", True),
+                "variation_seed": payload.get("variation_seed", 0),
+                "variation_strength": payload.get("variation_strength", 0.0),
+            }
+            
+            # 记录请求参数
+            logger.debug(f"图像生成请求参数: {json.dumps(formatted_payload, ensure_ascii=False)}")
+            
+            # 发起POST请求
+            logger.info(f"正在调用图像生成API，模型: {formatted_payload['model']}, 提示词: '{formatted_payload['prompt'][:50]}...'")
             response = requests.post(
-                f"{self.base_url}/images/generations",
+                api_url,
                 headers=headers,
                 json=formatted_payload,
-                timeout=self.timeout
+                timeout=60  # 增加超时时间到60秒
             )
-                    
-            response.raise_for_status()
-            response_data = response.json()
-            logger.info(f"生图响应数据: {response_data}")
-            return {
-                "images": [{"url": img["url"] for img in response_data.get('data', [])}],
-                "credits_used": response_data.get('credits_used', 0)
-            }
-        except requests.exceptions.RequestException as e:
             
-            raise
+            # 检查HTTP状态码
+            if response.status_code != 200:
+                logger.error(f"API请求失败，状态码: {response.status_code}, 响应: {response.text[:500]}")
+                return {"error": f"API请求失败 (HTTP {response.status_code}): {response.text[:100]}", "images": []}
+            
+            # 解析响应
+            try:
+                data = response.json()
+                logger.debug(f"API响应成功，数据大小: {len(str(data))} 字节")
+                
+                # 验证响应中是否有图像
+                if not data.get("data") or len(data["data"]) == 0:
+                    logger.warning("API响应中没有图像数据")
+                    return {"error": "API响应中没有图像数据", "images": []}
+                    
+                logger.info(f"成功生成 {len(data.get('data', []))} 张图像")
+                return {
+                    "images": [{"url": img["url"]} for img in data.get('data', [])],
+                    "credits_used": data.get('credits_used', 0)
+                }
+            except ValueError as e:
+                logger.error(f"无法解析API响应为JSON: {str(e)}", exc_info=True)
+                logger.error(f"原始响应: {response.text[:500]}")
+                return {"error": "无法解析API响应", "images": []}
+                
+        except requests.exceptions.ConnectTimeout as e:
+            logger.error(f"连接API超时: {str(e)}", exc_info=True)
+            return {"error": "连接API服务器超时，请检查网络连接和API服务器状态", "images": []}
+        except requests.exceptions.ReadTimeout as e:
+            logger.error(f"读取API响应超时: {str(e)}", exc_info=True)
+            return {"error": "等待API响应超时，可能是由于图像生成耗时过长或服务器繁忙", "images": []}
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"连接API服务器错误: {str(e)}", exc_info=True)
+            return {"error": "无法连接到API服务器，请检查网络连接和API服务器地址", "images": []}
+        except Exception as e:
+            logger.error(f"图像生成过程中发生未预期的错误: {str(e)}", exc_info=True)
+            return {"error": f"图像生成失败: {str(e)}", "images": []}
 
     @log_api_call
     def chat_completion(self, payload):

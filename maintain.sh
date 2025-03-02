@@ -49,8 +49,10 @@ show_help() {
     echo "  -a, --all          执行所有操作（拉取、更新权限、重启、检查状态）"
     echo "  -f, --fix-perms    仅修复文件权限"
     echo "  -n, --fix-nginx    修复Nginx端口冲突问题"
+    echo "  -nc, --nginx-config 检查Nginx配置并验证API代理"
     echo "  -rb, --rebuild     重建所有容器"
     echo "  -d, --debug-api    调试API 500错误"
+    echo "  -l, --logs [类型]   查看详细日志（类型：backend|frontend|api|error|all）"
     echo ""
     echo "示例："
     echo "  $0 --all           执行完整维护流程"
@@ -58,8 +60,12 @@ show_help() {
     echo "  $0 --restart       仅重启服务"
     echo "  $0 --status        仅检查状态"
     echo "  $0 --fix-nginx     修复Nginx端口冲突"
+    echo "  $0 --nginx-config  检查Nginx配置"
     echo "  $0 --rebuild       重建所有容器"
     echo "  $0 --debug-api     调试API错误"
+    echo "  $0 --logs backend  查看后端完整日志"
+    echo "  $0 --logs api      查看API详细日志"
+    echo "  $0 --logs error    查看错误日志"
 }
 
 # 拉取最新代码
@@ -242,9 +248,121 @@ fix_nginx_conflict() {
         
         log_info "查看Nginx错误日志..."
         docker exec frontend cat /var/log/nginx/error.log | tail -n 20
+        
+        # 添加对Nginx配置的更深入检查
+        log_info "检查Nginx API代理配置..."
+        docker exec frontend cat /etc/nginx/conf.d/default.conf | grep -A 10 "location /api" || echo "未找到API代理配置"
+        
+        # 添加测试API可用性的直接检查
+        log_info "直接测试后端API可用性..."
+        curl -s http://backend:5000/api/models > /dev/null
+        if [ $? -eq 0 ]; then
+            log_success "后端API可用，问题可能在Nginx配置"
+        else
+            log_error "后端API不可用，请检查后端服务"
+        fi
     fi
 
     log_success "Nginx端口冲突修复完成！"
+}
+
+# 添加新函数：检查Nginx配置
+check_nginx_config() {
+    log_info "开始检查Nginx配置..."
+    
+    # 检查frontend容器是否存在
+    if ! docker ps | grep -q frontend; then
+        log_error "前端容器不存在或未运行"
+        return 1
+    fi
+    
+    # 检查Nginx配置语法
+    log_info "检查Nginx配置语法..."
+    docker exec frontend nginx -t
+    check_result "Nginx配置语法检查失败" "continue" "Nginx配置语法正确"
+    
+    # 检查API代理配置
+    log_info "检查API代理配置..."
+    if docker exec frontend cat /etc/nginx/conf.d/default.conf | grep -q "location /api"; then
+        log_success "找到API代理配置"
+        docker exec frontend cat /etc/nginx/conf.d/default.conf | grep -A 10 "location /api"
+    else
+        log_error "没有找到API代理配置，这可能导致API请求失败"
+        
+        # 提供修复建议
+        log_info "建议在Nginx配置中添加以下API代理设置:"
+        echo '
+location /api {
+    proxy_pass http://backend:5000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 90;
+    proxy_connect_timeout 90;
+}
+'
+    fi
+    
+    # 检查静态文件配置
+    log_info "检查静态文件配置..."
+    if docker exec frontend cat /etc/nginx/conf.d/default.conf | grep -q "location /static"; then
+        log_success "找到静态文件配置"
+        docker exec frontend cat /etc/nginx/conf.d/default.conf | grep -A 5 "location /static"
+    else
+        log_warning "没有找到明确的静态文件配置，可能使用了默认配置"
+    fi
+    
+    # 检查环境变量
+    log_info "检查前端容器环境变量..."
+    docker exec frontend env | grep -i api
+    
+    # 检查网络连接
+    log_info "检查前端到后端的网络连接..."
+    if docker exec frontend ping -c 2 backend &>/dev/null; then
+        log_success "前端可以通过主机名'backend'连接到后端"
+    else
+        log_error "前端无法通过主机名'backend'连接到后端"
+        log_info "检查Docker网络配置..."
+        docker network ls
+        log_info "检查容器IP地址..."
+        docker inspect -f '{{.Name}} - {{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $(docker ps -q)
+    fi
+    
+    # 测试API连接
+    log_info "从前端容器测试后端API..."
+    if docker exec frontend curl -s http://backend:5000/api/models > /dev/null; then
+        log_success "从前端容器可以访问后端API"
+    else
+        log_error "从前端容器无法访问后端API"
+        # 尝试使用IP直接访问
+        BACKEND_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' backend)
+        log_info "尝试直接通过IP访问后端: ${BACKEND_IP}..."
+        if [ -n "$BACKEND_IP" ]; then
+            if docker exec frontend curl -s http://${BACKEND_IP}:5000/api/models > /dev/null; then
+                log_success "通过IP地址可以访问后端API，请检查Docker网络配置"
+            else
+                log_error "即使通过IP也无法访问后端API，请检查后端服务是否正常运行"
+            fi
+        fi
+    fi
+    
+    # 检查日志
+    log_info "检查Nginx错误日志..."
+    docker exec frontend cat /var/log/nginx/error.log | tail -n 20
+    
+    # 检查后端状态
+    log_info "检查后端API状态..."
+    if docker ps | grep -q backend; then
+        log_success "后端容器正在运行"
+        # 检查后端日志
+        log_info "查看后端最近日志..."
+        docker logs --tail 20 backend
+    else
+        log_error "后端容器未运行"
+    fi
+    
+    log_info "Nginx配置检查完成"
 }
 
 # 重建所有容器
@@ -370,6 +488,53 @@ except Exception as e:
     log_info "3. 重启后端服务：./maintain.sh --restart"
 }
 
+# 查看详细日志功能
+view_logs() {
+    local log_type="$1"
+    
+    if [ -z "$log_type" ]; then
+        log_error "请指定要查看的日志类型: backend, frontend, api, error, all"
+        return 1
+    fi
+    
+    case "$log_type" in
+        "backend")
+            log_info "查看后端服务日志..."
+            docker exec backend tail -n 100 /app/logs/app.log
+            ;;
+        "frontend")
+            log_info "查看前端服务日志..."
+            docker logs -n 100 frontend
+            ;;
+        "api")
+            log_info "查看API请求日志..."
+            docker exec backend tail -n 100 /app/logs/api.log
+            ;;
+        "error")
+            log_info "查看错误日志..."
+            docker exec backend tail -n 100 /app/logs/error.log
+            ;;
+        "all")
+            log_info "查看所有重要日志..."
+            log_info "=== 后端错误日志 ==="
+            docker exec backend tail -n 50 /app/logs/error.log
+            echo ""
+            log_info "=== API请求日志 ==="
+            docker exec backend tail -n 50 /app/logs/api.log
+            echo ""
+            log_info "=== 应用程序日志 ==="
+            docker exec backend tail -n 50 /app/logs/app.log
+            ;;
+        *)
+            log_error "未知的日志类型: $log_type"
+            log_info "可用的日志类型: backend, frontend, api, error, all"
+            return 1
+            ;;
+    esac
+    
+    return 0
+}
+
 # 执行所有操作
 do_all() {
     pull_latest_code
@@ -410,11 +575,24 @@ main() {
             -n | --fix-nginx)
                 fix_nginx_conflict
                 ;;
+            -nc | --nginx-config)
+                check_nginx_config
+                ;;
             -rb | --rebuild)
                 rebuild_containers
                 ;;
             -d | --debug-api)
                 debug_api
+                ;;
+            -l | --logs)
+                if [ -n "$2" ] && [[ "$2" != -* ]]; then
+                    view_logs "$2"
+                    shift
+                else
+                    log_error "缺少日志类型参数"
+                    show_help
+                    exit 1
+                fi
                 ;;
             *)
                 show_help

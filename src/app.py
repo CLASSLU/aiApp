@@ -347,6 +347,12 @@ def create_app():
         
         try:
             # 构造API请求参数
+            required_fields = ['prompt', 'width', 'height', 'num_images']
+            for field in required_fields:
+                if field not in data:
+                    logger.error(f"缺少必要参数: {field}")
+                    return jsonify({"error": f"缺少必要参数: {field}"}), 400
+            
             payload = {
                 "prompt": data['prompt'],
                 "model": data.get('model', 'black-forest-labs/FLUX.1-schnell'),
@@ -359,18 +365,33 @@ def create_app():
                 "variation_strength": 0.7
             }
             
+            logger.info(f"调用SiliconFlow API生成图像，模型: {payload['model']}")
+            
             # 使用LoggingSiliconFlowClient
             client = LoggingSiliconFlowClient()  # 通过环境变量自动获取API密钥
             result = client.generate_image(payload)
             
+            # 检查结果中是否有错误
+            if "error" in result:
+                logger.error(f"生成失败，API返回错误: {result['error']}")
+                return jsonify({"error": result["error"]}), 500
+            
+            # 检查是否有图像URL
+            if not result.get("images") or len(result["images"]) == 0:
+                logger.error("生成失败，API没有返回图像URL")
+                return jsonify({"error": "生成图像失败，未返回图像URL"}), 500
+            
             # 返回真实图片URL
-            return jsonify({
+            response_data = {
                 "images": [img['url'] for img in result['images']],
                 "usage": {
                     "duration": result.get('timings', {}).get('inference', 0),
                     "credits_used": result.get('credits_used', 0)
                 }
-            }), 200
+            }
+            
+            logger.info(f"生成成功，返回 {len(response_data['images'])} 张图像")
+            return jsonify(response_data), 200
             
         except KeyError as e:
             logger.error(f"参数错误：{str(e)}")
@@ -687,16 +708,28 @@ def create_app():
 
     @app.route('/static/<path:filename>')
     def serve_static(filename):
-        return send_from_directory(
-            os.path.join(app.root_path, '..', 'frontend', 'static'),
-            filename
-        )
+        """
+        提供静态文件服务
+        
+        注意：当使用Nginx作为前端容器时，此路由应该被Nginx处理，
+        此处保留是为了支持非Nginx环境或本地开发
+        """
+        logger.debug(f"后端接收到静态资源请求: {filename}")
+        try:
+            return send_from_directory(
+                os.path.join(app.root_path, '..', 'frontend', 'static'),
+                filename
+            )
+        except Exception as e:
+            logger.warning(f"静态资源请求失败: {str(e)}")
+            return f"静态资源请求失败: {str(e)}", 404
 
     def validate_image_url(url):
         """验证图片URL是否合法"""
         try:
             parsed = urlparse(url)
-            if parsed.scheme not in ('http', 'https'):
+            # 增加对内部Nginx转发的支持
+            if parsed.scheme not in ('http', 'https') and not url.startswith('/'):
                 return False
             return True
         except:

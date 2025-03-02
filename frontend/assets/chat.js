@@ -684,119 +684,155 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 更新AI响应流式显示
     function updateAIResponse(aiMessageDiv, content) {
-        // 预处理markdown内容
-        const preprocessedMarkdown = preprocessMarkdown(content);
+        if (!aiMessageDiv) {
+            console.error('updateAIResponse: aiMessageDiv 为空');
+            return;
+        }
         
-        // 使用完整配置的marked解析，确保代码块正确渲染
-        const renderedContent = marked.parse(preprocessedMarkdown);
-        aiMessageDiv.innerHTML = renderedContent;
-        
-        // 为所有代码块添加复制按钮
-        aiMessageDiv.querySelectorAll('pre code').forEach(function(block) {
-            // 检查是否已添加了复制按钮
-            if (block.parentNode.parentNode.className === 'code-block-wrapper') {
-                return;
-            }
+        try {
+            // 预处理markdown内容
+            const preprocessedMarkdown = preprocessMarkdown(content || '');
             
-            const pre = block.parentNode;
-            const wrapper = document.createElement('div');
-            wrapper.className = 'code-block-wrapper';
+            // 使用完整配置的marked解析，确保代码块正确渲染
+            const renderedContent = marked.parse(preprocessedMarkdown);
+            aiMessageDiv.innerHTML = renderedContent;
             
-            // 获取语言
-            const langMatch = block.className.match(/language-(\w+)/);
-            const lang = langMatch ? langMatch[1] : '';
-            
-            // 特殊样式处理
-            if (lang === 'docker' || lang === 'dockerfile') {
-                wrapper.classList.add('docker-code-block');
-            } else if (lang === 'bash' || lang === 'sh' || lang === 'shell') {
-                wrapper.classList.add('bash-code-block');
-            } else if (lang === 'yaml' || lang === 'yml') {
-                wrapper.classList.add('yaml-code-block');
-            }
-            
-            // 创建代码块头部
-            const header = document.createElement('div');
-            header.className = 'code-block-header';
-            
-            const langTag = document.createElement('div');
-            langTag.className = 'code-lang-tag';
-            
-            // 语言显示本地化
-            const langDisplayMap = {
-                'docker': 'Docker',
-                'dockerfile': 'Dockerfile',
-                'bash': 'Bash',
-                'sh': 'Shell',
-                'yaml': 'YAML',
-                'json': 'JSON',
-                'python': 'Python',
-                'javascript': 'JavaScript',
-                'html': 'HTML',
-                'css': 'CSS'
-            };
-            
-            langTag.textContent = langDisplayMap[lang] || lang || 'code';
-            
-            const copyBtn = document.createElement('button');
-            copyBtn.className = 'copy-button';
-            copyBtn.innerHTML = '<i class="fas fa-copy"></i> 复制';
-            copyBtn.onclick = function() {
-                const codeText = block.textContent;
-                navigator.clipboard.writeText(codeText).then(function() {
-                    // 临时改变按钮样式显示已复制
-                    const originalText = copyBtn.innerHTML;
-                    copyBtn.innerHTML = '<i class="fas fa-check"></i> 已复制';
-                    copyBtn.classList.add('copied');
+            // 为所有代码块添加复制按钮
+            const codeBlocks = aiMessageDiv.querySelectorAll('pre code');
+            if (codeBlocks && codeBlocks.length > 0) {
+                codeBlocks.forEach(function(block) {
+                    if (!block) return;
                     
-                    setTimeout(function() {
-                        copyBtn.innerHTML = originalText;
-                        copyBtn.classList.remove('copied');
-                    }, 2000);
-                }).catch(function(err) {
-                    console.error('复制失败:', err);
+                    // 检查是否已添加了复制按钮
+                    const parentNode = block.parentNode;
+                    if (!parentNode) return;
                     
-                    // 在复制失败时使用备用方法
-                    const textarea = document.createElement('textarea');
-                    textarea.value = codeText;
-                    textarea.style.position = 'fixed';  // 避免页面滚动
-                    document.body.appendChild(textarea);
-                    textarea.focus();
-                    textarea.select();
+                    const parentParentNode = parentNode.parentNode;
+                    if (!parentParentNode) return;
                     
-                    try {
-                        document.execCommand('copy');
-                        copyBtn.innerHTML = '<i class="fas fa-check"></i> 已复制';
-                        copyBtn.classList.add('copied');
-                        
-                        setTimeout(function() {
-                            copyBtn.innerHTML = originalText;
-                            copyBtn.classList.remove('copied');
-                        }, 2000);
-                    } catch (err) {
-                        console.error('备用复制方法失败:', err);
-                        copyBtn.innerHTML = '<i class="fas fa-times"></i> 复制失败';
-                        
-                        setTimeout(function() {
-                            copyBtn.innerHTML = originalText;
-                        }, 2000);
+                    if (parentParentNode.className === 'code-block-wrapper') {
+                        return;
                     }
                     
-                    document.body.removeChild(textarea);
+                    const pre = block.parentNode;
+                    if (!pre) return;
+                    
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'code-block-wrapper';
+                    
+                    // 获取语言
+                    let lang = '';
+                    if (block.className) {
+                        const langMatch = block.className.match(/language-(\w+)/);
+                        lang = langMatch ? langMatch[1] : '';
+                    }
+                    
+                    // 特殊样式处理
+                    if (lang === 'docker' || lang === 'dockerfile') {
+                        wrapper.classList.add('docker-code-block');
+                    } else if (lang === 'bash' || lang === 'sh' || lang === 'shell') {
+                        wrapper.classList.add('bash-code-block');
+                    } else if (lang === 'yaml' || lang === 'yml') {
+                        wrapper.classList.add('yaml-code-block');
+                    }
+                    
+                    // 创建代码块头部
+                    const header = document.createElement('div');
+                    header.className = 'code-block-header';
+                    
+                    const langTag = document.createElement('div');
+                    langTag.className = 'code-lang-tag';
+                    
+                    // 语言显示本地化
+                    const langDisplayMap = {
+                        'docker': 'Docker',
+                        'dockerfile': 'Dockerfile',
+                        'bash': 'Bash',
+                        'sh': 'Shell',
+                        'yaml': 'YAML',
+                        'json': 'JSON',
+                        'python': 'Python',
+                        'javascript': 'JavaScript',
+                        'html': 'HTML',
+                        'css': 'CSS'
+                    };
+                    
+                    langTag.textContent = langDisplayMap[lang] || lang || 'code';
+                    
+                    const copyBtn = document.createElement('button');
+                    copyBtn.className = 'copy-button';
+                    copyBtn.innerHTML = '<i class="fas fa-copy"></i> 复制';
+                    copyBtn.onclick = function() {
+                        if (!block) return;
+                        
+                        const codeText = block.textContent || '';
+                        navigator.clipboard.writeText(codeText).then(function() {
+                            // 临时改变按钮样式显示已复制
+                            const originalText = copyBtn.innerHTML;
+                            copyBtn.innerHTML = '<i class="fas fa-check"></i> 已复制';
+                            copyBtn.classList.add('copied');
+                            
+                            setTimeout(function() {
+                                copyBtn.innerHTML = originalText;
+                                copyBtn.classList.remove('copied');
+                            }, 2000);
+                        }).catch(function(err) {
+                            console.error('复制失败:', err);
+                            
+                            // 在复制失败时使用备用方法
+                            const textarea = document.createElement('textarea');
+                            textarea.value = codeText;
+                            textarea.style.position = 'fixed';  // 避免页面滚动
+                            document.body.appendChild(textarea);
+                            textarea.focus();
+                            textarea.select();
+                            
+                            try {
+                                document.execCommand('copy');
+                                copyBtn.innerHTML = '<i class="fas fa-check"></i> 已复制';
+                                copyBtn.classList.add('copied');
+                                
+                                setTimeout(function() {
+                                    copyBtn.innerHTML = originalText;
+                                    copyBtn.classList.remove('copied');
+                                }, 2000);
+                            } catch (err) {
+                                console.error('备用复制方法失败:', err);
+                                copyBtn.innerHTML = '<i class="fas fa-times"></i> 复制失败';
+                                
+                                setTimeout(function() {
+                                    copyBtn.innerHTML = originalText;
+                                }, 2000);
+                            }
+                            
+                            document.body.removeChild(textarea);
+                        });
+                    };
+                    
+                    header.appendChild(langTag);
+                    header.appendChild(copyBtn);
+                    
+                    // 将原始pre包装在wrapper中
+                    const parentPre = pre.parentNode;
+                    if (parentPre) {
+                        parentPre.insertBefore(wrapper, pre);
+                        wrapper.appendChild(header);
+                        wrapper.appendChild(pre);
+                    }
                 });
-            };
+            }
             
-            header.appendChild(langTag);
-            header.appendChild(copyBtn);
-            
-            // 将原始pre包装在wrapper中
-            pre.parentNode.insertBefore(wrapper, pre);
-            wrapper.appendChild(header);
-            wrapper.appendChild(pre);
-        });
-        
-        // 滚动到最新消息
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+            // 滚动到最新消息
+            if (chatMessages) {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        } catch (error) {
+            console.error('更新AI响应时发生错误:', error);
+            // 尝试简单显示内容，避免完全失败
+            if (aiMessageDiv) {
+                aiMessageDiv.textContent = content || '';
+            }
+        }
     }
 
     function updateModelSelect(data) {
