@@ -113,32 +113,6 @@ logger.info("应用启动中...")
 # 创建 Flask 应用
 app = Flask(__name__)
 
-# 配置CORS，允许所有来源
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
-
-# 添加CORS头处理
-@app.after_request
-def add_cors_headers(response):
-    origin = request.headers.get('Origin', '*')
-    response.headers.add('Access-Control-Allow-Origin', origin)
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    response.headers.add('Access-Control-Max-Age', '3600')
-    return response
-
-@app.before_request
-def handle_preflight():
-    if request.method == "OPTIONS":
-        response = make_response()
-        origin = request.headers.get('Origin', '*')
-        response.headers.add('Access-Control-Allow-Origin', origin)
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
-        response.headers.add('Access-Control-Max-Age', '3600')
-        return response
-
 # 设置 session secret key
 app.secret_key = os.getenv('SESSION_SECRET_KEY', 'default_session_secret_key')
 app.config['SESSION_TYPE'] = 'filesystem'
@@ -232,115 +206,42 @@ def create_app():
     app.config['SESSION_USE_SIGNER'] = True
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
 
-    # 配置日志系统
-    logging_config = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'standard': {
-                'format': '%(asctime)s [%(levelname)s] [%(name)s] %(message)s'
-            },
-            'detailed': {
-                'format': '%(asctime)s [%(levelname)s] [%(name)s:%(lineno)d] %(message)s'
-            },
-        },
-        'handlers': {
-            'console': {
-                'class': 'logging.StreamHandler',
-                'level': 'INFO',
-                'formatter': 'standard',
-                'stream': 'ext://sys.stdout'
-            },
-            'file': {
-                'class': 'logging.handlers.RotatingFileHandler',
-                'level': 'DEBUG',
-                'formatter': 'detailed',
-                'filename': '/app/logs/app.log',
-                'maxBytes': 10485760,  # 10MB
-                'backupCount': 5,
-                'encoding': 'utf8'
-            },
-            'error_file': {
-                'class': 'logging.handlers.RotatingFileHandler',
-                'level': 'ERROR',
-                'formatter': 'detailed',
-                'filename': '/app/logs/error.log',
-                'maxBytes': 10485760,  # 10MB
-                'backupCount': 5,
-                'encoding': 'utf8'
-            },
-            'api_file': {
-                'class': 'logging.handlers.RotatingFileHandler',
-                'level': 'DEBUG',
-                'formatter': 'detailed',
-                'filename': '/app/logs/api.log',
-                'maxBytes': 10485760,  # 10MB
-                'backupCount': 5,
-                'encoding': 'utf8'
-            },
-            'chat_file': {
-                'class': 'logging.handlers.RotatingFileHandler',
-                'level': 'DEBUG',
-                'formatter': 'detailed',
-                'filename': '/app/logs/chat.log',
-                'maxBytes': 10485760,  # 10MB
-                'backupCount': 5,
-                'encoding': 'utf8'
-            },
-        },
-        'loggers': {
-            '': {  # root logger
-                'handlers': ['console', 'file', 'error_file'],
-                'level': 'DEBUG',
-                'propagate': True
-            },
-            'werkzeug': {
-                'level': 'INFO',
-                'propagate': True,
-            },
-            'api': {
-                'handlers': ['console', 'api_file', 'error_file'],
-                'level': 'DEBUG',
-                'propagate': False,
-            },
-            'chat': {
-                'handlers': ['console', 'chat_file', 'error_file'],
-                'level': 'DEBUG',
-                'propagate': False,
-            }
-        }
-    }
-
-    # 应用日志配置
-    logging.config.dictConfig(logging_config)
-    logger = logging.getLogger(__name__)
-    
-    # 获取API专用日志记录器
-    api_logger = logging.getLogger('api')
+    # 配置CORS，允许所有来源
+    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
     # 全局CORS头设置
     @app.after_request
     def add_cors_headers(response):
-        response.headers.add('Access-Control-Allow-Origin', '*')
+        origin = request.headers.get('Origin', '*')
+        response.headers.add('Access-Control-Allow-Origin', origin)
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin')
         response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
         response.headers.add('Access-Control-Allow-Credentials', 'true')
+        response.headers.add('Access-Control-Max-Age', '3600')
         return response
         
     @app.before_request
     def handle_preflight():
         if request.method == "OPTIONS":
             response = make_response()
-            response.headers.add('Access-Control-Allow-Origin', '*')
+            origin = request.headers.get('Origin', '*')
+            response.headers.add('Access-Control-Allow-Origin', origin)
             response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin')
             response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
             response.headers.add('Access-Control-Allow-Credentials', 'true')
+            response.headers.add('Access-Control-Max-Age', '3600')
             return response
 
-    # 修复OPTIONS处理
+    # 修复OPTIONS处理 - 添加明确的OPTIONS路由处理
     @app.route('/api/<path:path>', methods=['OPTIONS'])
     def handle_options(path):
         response = make_response()
+        origin = request.headers.get('Origin', '*')
+        response.headers.add('Access-Control-Allow-Origin', origin)
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        response.headers.add('Access-Control-Max-Age', '3600')
         response.headers['Content-Length'] = '0'
         response.headers['Content-Type'] = 'text/plain'
         return response, 204

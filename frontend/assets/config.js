@@ -37,6 +37,7 @@
         const url = API_BASE_URL + endpoint;
         console.log('发起API请求:', url); // 调试信息
         
+        // 构建完整的选项
         const defaultOptions = {
             credentials: 'include',  // 携带cookie
             mode: 'cors',           // 强制CORS模式
@@ -47,17 +48,62 @@
             }
         };
         
+        // 组合选项
+        const finalOptions = {
+            ...defaultOptions,
+            ...options
+        };
+        
         try {
             // 对于OPTIONS请求的预处理
             if (options.method === 'OPTIONS') {
-                defaultOptions.headers['Access-Control-Request-Method'] = options.method || 'GET';
-                defaultOptions.headers['Access-Control-Request-Headers'] = 'Content-Type,Authorization,X-Requested-With';
+                finalOptions.headers['Access-Control-Request-Method'] = options.method || 'GET';
+                finalOptions.headers['Access-Control-Request-Headers'] = 'Content-Type,Authorization,X-Requested-With,Accept,Origin';
             }
             
-            const response = await fetch(url, {
-                ...defaultOptions,
-                ...options
-            });
+            // 添加特殊的重试逻辑，先尝试标准CORS模式
+            let retries = 0;
+            const maxRetries = 2;
+            let response;
+            
+            while (retries <= maxRetries) {
+                try {
+                    // 发送请求
+                    response = await fetch(url, finalOptions);
+                    break; // 如果请求成功，跳出循环
+                } catch (error) {
+                    // 如果是CORS错误并且还有重试次数
+                    if (error instanceof TypeError && 
+                        error.message.includes('Failed to fetch') && 
+                        retries < maxRetries) {
+                        retries++;
+                        console.warn(`CORS请求失败，尝试第${retries}次重试...`);
+                        
+                        if (retries === maxRetries) {
+                            // 最后一次尝试，使用简化的CORS设置
+                            console.warn('使用简化的CORS设置重试...');
+                            finalOptions.headers = {
+                                'Content-Type': 'application/json',
+                                'X-Request-Source': 'webapp'
+                            };
+                            // 如果是GET请求，尝试添加时间戳避免缓存问题
+                            if (!options.method || options.method === 'GET') {
+                                const timestampSuffix = `${endpoint.includes('?') ? '&' : '?'}_t=${Date.now()}`;
+                                response = await fetch(url + timestampSuffix, finalOptions);
+                            } else {
+                                response = await fetch(url, finalOptions);
+                            }
+                            break;
+                        }
+                        
+                        // 暂停一下再重试
+                        await new Promise(resolve => setTimeout(resolve, 500 * retries));
+                    } else {
+                        // 如果不是CORS错误或已无重试次数，抛出错误
+                        throw error;
+                    }
+                }
+            }
             
             // 检查响应状态
             if (!response.ok) {
