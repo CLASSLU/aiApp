@@ -255,21 +255,19 @@ class LoggingSiliconFlowClient:
         if not LoggingSiliconFlowClient._instance:
             # 验证环境变量
             api_key = os.getenv('SILICONFLOW_API_KEY')
-            logger.info(f"尝试加载 SILICONFLOW_API_KEY: {api_key[:5]}...")  # 增加日志记录
+            logger.info(f"初始化SiliconFlow客户端，API密钥状态: {'已设置' if api_key else '未设置'}")
             
-            # 新增：增加密钥格式验证
             if not api_key:
-                raise ValueError("未设置 SILICONFLOW_API_KEY 环境变量")
-            if not api_key.startswith('sk-'):
-                raise ValueError("API Key 格式不正确，应以 'sk-' 开头")
-
+                logger.warning("未设置 SILICONFLOW_API_KEY 环境变量，API功能将无法使用")
+            
             # 初始化客户端
             self.base_url = "https://api.siliconflow.com/v1"  # 或其他正确的基础URL
             self.headers = {
-                "Authorization": f"Bearer {api_key}",
+                "Authorization": f"Bearer {api_key}" if api_key else "",
                 "Content-Type": "application/json",
                 "Accept": "application/json"  # 明确指定接受 JSON 响应
             }
+            
             self.timeout = 30
             
             LoggingSiliconFlowClient._instance = self
@@ -444,6 +442,12 @@ class LoggingSiliconFlowClient:
             if isinstance(payload, tuple):
                 payload = payload[0]
             
+            # 检查API密钥是否存在
+            if not self.headers.get("Authorization"):
+                error_msg = "缺少API密钥，请设置SILICONFLOW_API_KEY环境变量"
+                logger.error(error_msg)
+                raise RuntimeError(error_msg)
+                
             # 格式化请求参数
             formatted_payload = {
                 "model": payload["model"],
