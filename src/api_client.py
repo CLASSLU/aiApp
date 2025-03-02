@@ -255,6 +255,9 @@ class LoggingSiliconFlowClient:
         if not LoggingSiliconFlowClient._instance:
             # 验证环境变量
             api_key = os.getenv('SILICONFLOW_API_KEY')
+            logger.info(f"尝试加载 SILICONFLOW_API_KEY: {api_key[:5]}...")  # 增加日志记录
+            
+            # 新增：增加密钥格式验证
             if not api_key:
                 raise ValueError("未设置 SILICONFLOW_API_KEY 环境变量")
             if not api_key.startswith('sk-'):
@@ -268,7 +271,6 @@ class LoggingSiliconFlowClient:
                 "Accept": "application/json"  # 明确指定接受 JSON 响应
             }
             self.timeout = 30
-            
             
             LoggingSiliconFlowClient._instance = self
             LoggingSiliconFlowClient._session = requests.Session()
