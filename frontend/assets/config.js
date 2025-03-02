@@ -42,11 +42,18 @@
             mode: 'cors',           // 强制CORS模式
             headers: {
                 'Content-Type': 'application/json',
-                'X-Request-Source': 'webapp'
+                'X-Request-Source': 'webapp',
+                'Origin': window.location.origin
             }
         };
         
         try {
+            // 对于OPTIONS请求的预处理
+            if (options.method === 'OPTIONS') {
+                defaultOptions.headers['Access-Control-Request-Method'] = options.method || 'GET';
+                defaultOptions.headers['Access-Control-Request-Headers'] = 'Content-Type,Authorization,X-Requested-With';
+            }
+            
             const response = await fetch(url, {
                 ...defaultOptions,
                 ...options
@@ -68,6 +75,14 @@
             return response;
         } catch (error) {
             console.error('API请求失败:', error);
+            
+            // 针对CORS错误提供更详细的日志
+            if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+                console.error('可能是CORS策略阻止了请求，请检查服务器CORS配置');
+                console.error('请求URL:', url);
+                console.error('当前源:', window.location.origin);
+            }
+            
             throw error;
         }
     }
