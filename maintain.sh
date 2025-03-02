@@ -50,6 +50,7 @@ show_help() {
     echo "  -f, --fix-perms    仅修复文件权限"
     echo "  -n, --fix-nginx    修复Nginx端口冲突问题"
     echo "  -rb, --rebuild     重建所有容器"
+    echo "  -d, --debug-api    调试API 500错误"
     echo ""
     echo "示例："
     echo "  $0 --all           执行完整维护流程"
@@ -58,6 +59,7 @@ show_help() {
     echo "  $0 --status        仅检查状态"
     echo "  $0 --fix-nginx     修复Nginx端口冲突"
     echo "  $0 --rebuild       重建所有容器"
+    echo "  $0 --debug-api     调试API错误"
 }
 
 # 拉取最新代码
@@ -288,6 +290,86 @@ rebuild_containers() {
     log_info "  后端日志: docker logs backend"
 }
 
+# 调试API错误
+debug_api() {
+    log_info "开始调试API 500错误..."
+
+    # 获取详细后端日志
+    log_info "检查详细后端日志..."
+    docker logs backend --tail 50
+    
+    # 检查后端Flask应用运行状态
+    log_info "检查后端进程..."
+    docker exec backend ps aux
+    
+    # 检查环境变量
+    log_info "检查后端环境变量..."
+    docker exec backend env | grep -E 'FLASK|PYTHON|PATH|API'
+    
+    # 直接测试后端API
+    log_info "直接测试后端API..."
+    echo "从后端容器内部测试:"
+    docker exec backend curl -sv http://localhost:5000/api/models
+    
+    echo -e "\n从主机直接测试后端:"
+    curl -sv http://localhost:5000/api/models
+    
+    # 检查API路由和配置
+    log_info "检查API路由..."
+    docker exec backend python -c "
+import sys
+sys.path.append('/app')
+try:
+    from src.app import create_app
+    app = create_app()
+    print('\\n注册的路由:')
+    for rule in app.url_map.iter_rules():
+        print(f'{rule.endpoint}: {rule.methods} - {rule}')
+except Exception as e:
+    print(f'导入应用失败: {e}')
+"
+    
+    # 检查常见错误
+    log_info "测试常见依赖项..."
+    docker exec backend python -c "
+try:
+    import flask
+    print(f'Flask版本: {flask.__version__}')
+    
+    # 检查其他关键依赖
+    for module in ['requests', 'numpy', 'json', 'os']:
+        try:
+            __import__(module)
+            print(f'{module} 已安装')
+        except ImportError:
+            print(f'{module} 未安装')
+            
+except Exception as e:
+    print(f'依赖检查失败: {e}')
+"
+
+    # 尝试启用更详细的后端日志
+    log_info "启用详细的Flask调试信息..."
+    docker exec backend bash -c "export FLASK_DEBUG=1 && export LOG_LEVEL=DEBUG"
+    
+    # 检查后端日志文件
+    log_info "检查后端日志文件..."
+    docker exec backend ls -la /app/logs 2>/dev/null || echo "无日志目录"
+    docker exec backend find /app -name "*.log" 2>/dev/null || echo "未找到日志文件"
+    
+    log_success "API调试完成！"
+    log_info "请检查上面的日志，特别关注以下内容:"
+    log_info "1. 后端应用错误日志"
+    log_info "2. API路由是否正确注册"
+    log_info "3. 依赖项是否都已正确安装"
+    log_info "4. 环境变量是否正确设置"
+    log_info ""
+    log_info "常见解决方法:"
+    log_info "1. 检查数据库连接"
+    log_info "2. 检查API密钥或配置文件"
+    log_info "3. 重启后端服务：./maintain.sh --restart"
+}
+
 # 执行所有操作
 do_all() {
     pull_latest_code
@@ -330,6 +412,9 @@ main() {
                 ;;
             -rb | --rebuild)
                 rebuild_containers
+                ;;
+            -d | --debug-api)
+                debug_api
                 ;;
             *)
                 show_help
