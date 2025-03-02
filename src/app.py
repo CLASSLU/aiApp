@@ -112,7 +112,28 @@ logger.info("应用启动中...")
 
 # 创建 Flask 应用
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})  
+
+# 配置CORS，允许所有来源
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+# 添加CORS头处理
+@app.after_request
+def add_cors_headers(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response
+
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
 
 # 设置 session secret key
 app.secret_key = os.getenv('SESSION_SECRET_KEY', 'default_session_secret_key')
@@ -293,45 +314,24 @@ def create_app():
     # 获取API专用日志记录器
     api_logger = logging.getLogger('api')
 
-    # 修复中间件顺序问题
+    # 全局CORS头设置
     @app.after_request
-    def finalize_response(response):
-        """统一处理响应头的中间件"""
-        # 先执行其他中间件
-        response = add_cors_headers(response)
-        return response
-
     def add_cors_headers(response):
-        origin = request.headers.get('Origin')
-        # 放宽CORS限制，允许更多的来源
-        allowed_origins = [
-            "http://113.45.251.116", 
-            "http://113.45.251.116:80",
-            "http://113.45.251.116:3000",
-            "http://localhost",
-            "http://localhost:3000",
-            "http://localhost:80"
-        ]
-        
-        # 精确匹配协议+域名+端口
-        if origin in allowed_origins:
-            response.headers['Access-Control-Allow-Origin'] = origin
-        else:
-            # 如果域名相同但端口不同，也允许访问（生产环境常见情况）
-            parsed_origin = urlparse(origin or "")
-            if parsed_origin.netloc and parsed_origin.netloc.startswith('113.45.251.116'):
-                response.headers['Access-Control-Allow-Origin'] = origin
-            else:
-                # 默认允许当前域名
-                response.headers['Access-Control-Allow-Origin'] = origin or '*'
-                
-        response.headers['Vary'] = 'Origin'
-        # 添加更多允许的Headers
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Requested-With, X-Request-Source, Authorization'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, PUT, DELETE'
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        response.headers['Access-Control-Max-Age'] = '86400'
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
         return response
+        
+    @app.before_request
+    def handle_preflight():
+        if request.method == "OPTIONS":
+            response = make_response()
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Origin')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+            response.headers.add('Access-Control-Allow-Credentials', 'true')
+            return response
 
     # 修复OPTIONS处理
     @app.route('/api/<path:path>', methods=['OPTIONS'])
