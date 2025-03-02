@@ -30,7 +30,8 @@
       - "80:80"
     environment:
       - NODE_ENV=production
-    command: ["http-server", ".", "-p", "80", "--cors"]
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
     restart: unless-stopped
     depends_on:
       - backend

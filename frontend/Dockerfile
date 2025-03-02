@@ -1,15 +1,19 @@
-FROM node:18-alpine
+FROM nginx:alpine
 
-# 安装http-server
-RUN npm install -g http-server
+# 安装必要的工具
+RUN apk add --no-cache bash curl
 
-WORKDIR /app
+# 创建应用目录
+WORKDIR /usr/share/nginx/html
 
 # 复制前端文件
 COPY . .
 
+# 复制Nginx配置
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
 # 暴露80端口
 EXPOSE 80
 
-# 启动http-server，添加CORS支持
-CMD ["http-server", ".", "-p", "80", "--cors"]
+# 启动Nginx
+CMD ["nginx", "-g", "daemon off;"]

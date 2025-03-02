@@ -46,16 +46,24 @@ if [ "$1" == "frontend-all" ]; then
     # 更新整个前端目录
     echo -e "${BLUE}更新前端目录...${NC}"
     
-    # 首先备份前端容器中的node_modules
-    echo -e "${BLUE}备份node_modules...${NC}"
-    docker exec $FRONTEND_CONTAINER bash -c "if [ -d /app/node_modules ]; then cp -r /app/node_modules /tmp/node_modules; fi"
-    
     # 复制前端文件到容器
-    docker cp -a "./frontend/." "$FRONTEND_CONTAINER:/app"
+    docker cp -a "./frontend/." "$FRONTEND_CONTAINER:/usr/share/nginx/html"
     
-    # 恢复node_modules
-    echo -e "${BLUE}恢复node_modules...${NC}"
-    docker exec $FRONTEND_CONTAINER bash -c "if [ -d /tmp/node_modules ]; then cp -r /tmp/node_modules /app/node_modules; rm -rf /tmp/node_modules; fi"
+    # 如果存在nginx配置文件，复制它
+    if [ -f "./frontend/nginx.conf" ]; then
+        echo -e "${BLUE}更新Nginx配置...${NC}"
+        docker cp "./frontend/nginx.conf" "$FRONTEND_CONTAINER:/etc/nginx/conf.d/default.conf"
+        
+        # 检查nginx配置是否有效
+        if docker exec $FRONTEND_CONTAINER nginx -t &>/dev/null; then
+            echo -e "${GREEN}Nginx配置有效${NC}"
+            # 重新加载Nginx配置
+            docker exec $FRONTEND_CONTAINER nginx -s reload
+        else
+            echo -e "${RED}警告: Nginx配置无效，请检查配置文件${NC}"
+            docker exec $FRONTEND_CONTAINER nginx -t
+        fi
+    fi
     
     echo -e "${GREEN}前端文件更新成功${NC}"
     
@@ -121,7 +129,7 @@ for path in "$@"; do
         container=$FRONTEND_CONTAINER
         # 去掉路径前缀frontend/
         relative_path=${path#frontend/}
-        target_path="/app/$relative_path"
+        target_path="/usr/share/nginx/html/$relative_path"
         is_frontend=true
     elif [[ $path == src/* ]]; then
         # 如果是 src 目录下的文件，直接复制到容器的 /app/src 目录
@@ -200,4 +208,68 @@ else
 fi
 
 echo -e "${GREEN}更新流程已完成${NC}"
-echo -e "${BLUE}提示: 如果应用没有自动重启，请运行: docker exec $BACKEND_CONTAINER bash /app/hot_reload.sh${NC}" 
+echo -e "${BLUE}提示: 如果应用没有自动重启，请运行: docker exec $BACKEND_CONTAINER bash /app/hot_reload.sh${NC}"
+
+# 处理单个文件更新
+SRC_FILE=$1
+echo -e "${YELLOW}正在更新: $SRC_FILE ${NC}"
+
+# 确定目标容器
+if [[ "$SRC_FILE" == frontend/* ]]; then
+    # 前端文件
+    CONTAINER=$FRONTEND_CONTAINER
+    check_container $CONTAINER
+    
+    # 对于前端文件，确定容器中的目标路径
+    if [[ "$SRC_FILE" == frontend/nginx.conf ]]; then
+        # 特殊处理nginx.conf文件
+        DEST_PATH="/etc/nginx/conf.d/default.conf"
+    else
+        # 其他前端文件
+        DEST_PATH="/usr/share/nginx/html/${SRC_FILE#frontend/}"
+    fi
+    
+    # 确保目标目录存在
+    DEST_DIR=$(dirname "$DEST_PATH")
+    docker exec $CONTAINER mkdir -p "$DEST_DIR"
+    
+    # 复制文件
+    docker cp "$SRC_FILE" "$CONTAINER:$DEST_PATH"
+    echo -e "${GREEN}已更新: $DEST_PATH${NC}"
+    
+    # 如果更新的是nginx配置，需要重新加载
+    if [[ "$SRC_FILE" == frontend/nginx.conf ]]; then
+        if docker exec $CONTAINER nginx -t &>/dev/null; then
+            echo -e "${GREEN}Nginx配置有效，正在重新加载...${NC}"
+            docker exec $CONTAINER nginx -s reload
+            echo -e "${GREEN}Nginx配置已重新加载${NC}"
+        else
+            echo -e "${RED}警告: Nginx配置无效，请检查配置文件${NC}"
+            docker exec $CONTAINER nginx -t
+        fi
+    fi
+fi
+
+# 验证前端目录挂载
+check_frontend_mount() {
+    echo -e "${BLUE}验证前端目录挂载...${NC}"
+    # 创建测试文件
+    TEST_FILE="mount_test_$(date +%s).txt"
+    echo "test" > "./frontend/$TEST_FILE"
+    
+    # 检查容器内是否存在该文件
+    if docker exec $FRONTEND_CONTAINER test -f "/usr/share/nginx/html/$TEST_FILE"; then
+        echo -e "${GREEN}前端目录挂载正常${NC}"
+        # 清理测试文件
+        rm "./frontend/$TEST_FILE"
+        docker exec $FRONTEND_CONTAINER rm "/usr/share/nginx/html/$TEST_FILE" 2>/dev/null || true
+        return 0
+    else
+        echo -e "${RED}警告: 前端目录挂载异常${NC}"
+        echo -e "${YELLOW}本地文件未同步到容器，更新可能不会立即生效${NC}"
+        echo -e "${YELLOW}建议修改docker-compose.yml文件，确保挂载配置正确${NC}"
+        # 清理测试文件
+        rm "./frontend/$TEST_FILE"
+        return 1
+    fi
+} 
