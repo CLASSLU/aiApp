@@ -542,6 +542,163 @@ do_all() {
     check_status
 }
 
+# 检查Docker是否运行
+check_docker_running() {
+    log_info "检查Docker是否正在运行..."
+    
+    # 尝试执行一个简单的Docker命令来测试Docker是否运行
+    if ! docker info > /dev/null 2>&1; then
+        log_warning "Docker未运行，尝试启动Docker..."
+        
+        # 检测操作系统类型
+        if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+            # Windows环境
+            log_info "检测到Windows系统，尝试启动Docker Desktop..."
+            
+            # 使用多种方法尝试启动Docker Desktop
+            STARTED=false
+            
+            # 方法1: 使用开始菜单中的快捷方式(以管理员权限)
+            log_info "方法1: 尝试通过快捷方式启动Docker Desktop..."
+            if command -v powershell.exe &>/dev/null; then
+                powershell.exe -Command "Start-Process 'C:\Program Files\Docker\Docker\Docker Desktop.exe' -Verb RunAs" &
+                sleep 5
+                
+                if docker info > /dev/null 2>&1; then
+                    log_success "Docker已通过方法1成功启动!"
+                    STARTED=true
+                else
+                    log_warning "方法1未能启动Docker, 尝试方法2..."
+                fi
+            fi
+            
+            # 方法2: 尝试启动Docker服务
+            if [ "$STARTED" = false ] && command -v powershell.exe &>/dev/null; then
+                log_info "方法2: 尝试启动Docker服务..."
+                # 以管理员权限启动Docker服务
+                powershell.exe -Command "Start-Process powershell -ArgumentList '-Command Get-Service *docker* | Start-Service' -Verb RunAs" &
+                sleep 10
+                
+                if docker info > /dev/null 2>&1; then
+                    log_success "Docker已通过方法2成功启动!"
+                    STARTED=true
+                else
+                    log_warning "方法2未能启动Docker, 尝试方法3..."
+                fi
+            fi
+            
+            # 方法3: 使用cmd.exe直接启动应用程序
+            if [ "$STARTED" = false ] && command -v cmd.exe &>/dev/null; then
+                log_info "方法3: 尝试用CMD启动Docker Desktop..."
+                cmd.exe /c "start \"\" \"C:\Program Files\Docker\Docker\Docker Desktop.exe\"" &
+                sleep 5
+                
+                if docker info > /dev/null 2>&1; then
+                    log_success "Docker已通过方法3成功启动!"
+                    STARTED=true
+                else
+                    log_warning "方法3未能启动Docker, 尝试方法4..."
+                fi
+            fi
+            
+            # 方法4: 尝试使用WindowsApps直接启动
+            if [ "$STARTED" = false ]; then
+                log_info "方法4: 尝试通过Windows应用启动器启动Docker..."
+                powershell.exe -Command "Start-Process shell:AppsFolder\Docker.DockerDesktop" &
+                sleep 5
+                
+                if docker info > /dev/null 2>&1; then
+                    log_success "Docker已通过方法4成功启动!"
+                    STARTED=true
+                else
+                    log_warning "方法4未能启动Docker..."
+                fi
+            fi
+            
+            # 如果上述方法都没有立即启动Docker，等待一段时间看是否启动
+            if [ "$STARTED" = false ]; then
+                log_warning "正在等待Docker启动 (最多90秒)..."
+                for i in {1..45}; do
+                    sleep 2
+                    if docker info > /dev/null 2>&1; then
+                        log_success "Docker已成功启动!"
+                        return 0
+                    fi
+                    echo -n "."
+                done
+                
+                # 尝试显示一些诊断信息
+                echo ""
+                log_warning "收集Docker诊断信息..."
+                
+                # 检查Docker相关服务
+                if command -v powershell.exe &>/dev/null; then
+                    log_info "Docker服务状态:"
+                    powershell.exe -Command "Get-Service *docker* | Select-Object Name, Status, StartType" || echo "无法获取服务信息"
+                fi
+                
+                # 检查Docker Desktop安装情况
+                if [ -f "/c/Program Files/Docker/Docker/Docker Desktop.exe" ]; then
+                    log_info "Docker Desktop已安装在C盘"
+                elif [ -f "/d/Program Files/Docker/Docker/Docker Desktop.exe" ]; then
+                    log_info "Docker Desktop已安装在D盘"
+                elif [ -f "/e/Program Files/Docker/Docker/Docker Desktop.exe" ]; then
+                    log_info "Docker Desktop已安装在E盘"
+                else
+                    log_error "找不到Docker Desktop安装文件"
+                fi
+                
+                log_error "无法自动启动Docker Desktop，请手动启动后重试"
+                log_warning "若首次安装Docker Desktop，可能需要完成初始设置"
+                return 1
+            fi
+            
+            return 0
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS环境
+            log_info "检测到macOS系统，尝试启动Docker..."
+            open -a Docker 2>/dev/null
+            
+            # 等待Docker启动
+            log_warning "等待Docker启动 (最多60秒)..."
+            for i in {1..30}; do
+                sleep 2
+                if docker info > /dev/null 2>&1; then
+                    log_success "Docker已成功启动!"
+                    return 0
+                fi
+                echo -n "."
+            done
+            
+            echo ""
+            log_error "等待Docker启动超时，请手动启动Docker后重试"
+            return 1
+        else
+            # Linux环境
+            log_info "检测到Linux系统，尝试启动Docker服务..."
+            sudo systemctl start docker
+            
+            # 等待Docker启动
+            log_warning "等待Docker启动 (最多30秒)..."
+            for i in {1..15}; do
+                sleep 2
+                if docker info > /dev/null 2>&1; then
+                    log_success "Docker已成功启动!"
+                    return 0
+                fi
+                echo -n "."
+            done
+            
+            echo ""
+            log_error "Docker启动失败，请确保Docker已安装并手动启动后重试"
+            return 1
+        fi
+    else
+        log_success "Docker正在运行"
+        return 0
+    fi
+}
+
 # 主逻辑
 main() {
     # 如果没有参数，显示帮助信息
@@ -549,6 +706,9 @@ main() {
         show_help
         exit 1
     fi
+    
+    # 检查Docker是否运行
+    check_docker_running || exit 1
     
     # 解析命令行参数
     while [ "$1" != "" ]; do

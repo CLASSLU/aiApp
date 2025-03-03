@@ -29,6 +29,163 @@ check_script_format() {
     fi
 }
 
+# 检查Docker是否运行
+check_docker_running() {
+    echo -e "${BLUE}检查Docker是否正在运行...${NC}"
+    
+    # 尝试执行一个简单的Docker命令来测试Docker是否运行
+    if ! docker info > /dev/null 2>&1; then
+        echo -e "${YELLOW}Docker未运行，尝试启动Docker...${NC}"
+        
+        # 检测操作系统类型
+        if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+            # Windows环境
+            echo -e "${BLUE}检测到Windows系统，尝试启动Docker Desktop...${NC}"
+            
+            # 检查Docker服务是否存在
+            echo -e "${BLUE}检查Docker服务状态...${NC}"
+            
+            # 使用多种方法尝试启动Docker Desktop
+            STARTED=false
+            
+            # 方法1: 使用开始菜单中的快捷方式
+            echo -e "${BLUE}方法1: 尝试通过快捷方式启动Docker Desktop...${NC}"
+            if command -v powershell.exe &>/dev/null; then
+                powershell.exe -Command "Start-Process 'C:\Program Files\Docker\Docker\Docker Desktop.exe' -Verb RunAs" &
+                sleep 5
+                
+                if docker info > /dev/null 2>&1; then
+                    echo -e "${GREEN}Docker已通过方法1成功启动!${NC}"
+                    STARTED=true
+                else
+                    echo -e "${YELLOW}方法1未能启动Docker, 尝试方法2...${NC}"
+                fi
+            fi
+            
+            # 方法2: 尝试启动Docker服务
+            if [ "$STARTED" = false ] && command -v powershell.exe &>/dev/null; then
+                echo -e "${BLUE}方法2: 尝试启动Docker服务...${NC}"
+                # 以管理员权限启动Docker服务
+                powershell.exe -Command "Start-Process powershell -ArgumentList '-Command Get-Service *docker* | Start-Service' -Verb RunAs" &
+                sleep 10
+                
+                if docker info > /dev/null 2>&1; then
+                    echo -e "${GREEN}Docker已通过方法2成功启动!${NC}"
+                    STARTED=true
+                else
+                    echo -e "${YELLOW}方法2未能启动Docker, 尝试方法3...${NC}"
+                fi
+            fi
+            
+            # 方法3: 使用cmd.exe直接启动应用程序
+            if [ "$STARTED" = false ] && command -v cmd.exe &>/dev/null; then
+                echo -e "${BLUE}方法3: 尝试用CMD启动Docker Desktop...${NC}"
+                cmd.exe /c "start \"\" \"C:\Program Files\Docker\Docker\Docker Desktop.exe\"" &
+                sleep 5
+                
+                if docker info > /dev/null 2>&1; then
+                    echo -e "${GREEN}Docker已通过方法3成功启动!${NC}"
+                    STARTED=true
+                else
+                    echo -e "${YELLOW}方法3未能启动Docker, 尝试方法4...${NC}"
+                fi
+            fi
+            
+            # 方法4: 尝试使用WindowsApps直接启动
+            if [ "$STARTED" = false ]; then
+                echo -e "${BLUE}方法4: 尝试通过Windows应用启动器启动Docker...${NC}"
+                powershell.exe -Command "Start-Process shell:AppsFolder\Docker.DockerDesktop" &
+                sleep 5
+                
+                if docker info > /dev/null 2>&1; then
+                    echo -e "${GREEN}Docker已通过方法4成功启动!${NC}"
+                    STARTED=true
+                else
+                    echo -e "${YELLOW}方法4未能启动Docker...${NC}"
+                fi
+            fi
+            
+            # 如果上述方法都没有立即启动Docker，等待一段时间看是否启动
+            if [ "$STARTED" = false ]; then
+                echo -e "${YELLOW}正在等待Docker启动 (最多90秒)...${NC}"
+                for i in {1..45}; do
+                    sleep 2
+                    if docker info > /dev/null 2>&1; then
+                        echo -e "${GREEN}Docker已成功启动!${NC}"
+                        return 0
+                    fi
+                    echo -n "."
+                done
+                
+                # 尝试显示一些诊断信息
+                echo -e "\n${YELLOW}收集Docker诊断信息...${NC}"
+                
+                # 检查Docker相关服务
+                if command -v powershell.exe &>/dev/null; then
+                    echo -e "${BLUE}Docker服务状态:${NC}"
+                    powershell.exe -Command "Get-Service *docker* | Select-Object Name, Status, StartType" || echo "无法获取服务信息"
+                fi
+                
+                # 检查Docker Desktop安装情况
+                if [ -f "/c/Program Files/Docker/Docker/Docker Desktop.exe" ]; then
+                    echo -e "${BLUE}Docker Desktop已安装在C盘${NC}"
+                elif [ -f "/d/Program Files/Docker/Docker/Docker Desktop.exe" ]; then
+                    echo -e "${BLUE}Docker Desktop已安装在D盘${NC}"
+                elif [ -f "/e/Program Files/Docker/Docker/Docker Desktop.exe" ]; then
+                    echo -e "${BLUE}Docker Desktop已安装在E盘${NC}"
+                else
+                    echo -e "${RED}找不到Docker Desktop安装文件${NC}"
+                fi
+                
+                echo -e "\n${RED}无法自动启动Docker Desktop，请手动启动后重试${NC}"
+                echo -e "${YELLOW}若首次安装Docker Desktop，可能需要完成初始设置${NC}"
+                return 1
+            fi
+            
+            return 0
+        elif [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS环境
+            echo -e "${BLUE}检测到macOS系统，尝试启动Docker...${NC}"
+            open -a Docker
+            
+            # 等待Docker启动
+            echo -e "${YELLOW}等待Docker启动 (最多60秒)...${NC}"
+            for i in {1..30}; do
+                sleep 2
+                if docker info > /dev/null 2>&1; then
+                    echo -e "${GREEN}Docker已成功启动!${NC}"
+                    return 0
+                fi
+                echo -n "."
+            done
+            
+            echo -e "\n${RED}等待Docker启动超时，请手动启动Docker后重试${NC}"
+            return 1
+        else
+            # Linux环境
+            echo -e "${BLUE}检测到Linux系统，尝试启动Docker服务...${NC}"
+            sudo systemctl start docker
+            
+            # 等待Docker启动
+            echo -e "${YELLOW}等待Docker启动 (最多30秒)...${NC}"
+            for i in {1..15}; do
+                sleep 2
+                if docker info > /dev/null 2>&1; then
+                    echo -e "${GREEN}Docker已成功启动!${NC}"
+                    return 0
+                fi
+                echo -n "."
+            done
+            
+            echo -e "\n${RED}Docker启动失败，请确保Docker已安装并手动启动后重试${NC}"
+            return 1
+        fi
+    else
+        echo -e "${GREEN}Docker正在运行${NC}"
+        return 0
+    fi
+}
+
 # 检测操作系统并设置环境变量
 if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
     export COMPOSE_CONVERT_WINDOWS_PATHS=1
@@ -119,6 +276,9 @@ validate_command "$1" || exit 1
 # 设置默认的 compose 文件
 COMPOSE_FILE=$DEV_COMPOSE_FILE
 ENV_TYPE="开发环境"
+
+# 确保Docker运行，如果启动Docker失败则退出
+check_docker_running || exit 1
 
 case "$1" in
   prod)
