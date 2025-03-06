@@ -366,46 +366,42 @@ location /api {
 }
 
 # 重建所有容器
-rebuild_containers() {
-    log_info "开始重建Docker容器..."
-
-    # 停止所有容器
-    log_info "停止所有容器..."
+rebuild_services() {
+    log_info "开始重建所有容器..."
+    
+    # 停止并删除所有容器
+    log_info "停止并删除现有容器..."
     docker-compose down
-
-    # 重新构建容器
-    log_info "重新构建容器..."
-    docker-compose build
-
-    # 启动容器
-    log_info "启动容器..."
+    check_result "停止容器失败" "continue" "停止容器成功"
+    
+    # 删除所有相关镜像
+    log_info "删除旧镜像..."
+    docker images | grep "aiapp" | awk '{print $3}' | xargs -r docker rmi -f
+    
+    # 处理前端依赖
+    log_info "处理前端依赖..."
+    cd frontend
+    chmod +x download_deps.sh
+    ./download_deps.sh
+    cd ..
+    check_result "前端依赖处理失败" "continue" "前端依赖处理成功"
+    
+    # 强制重新构建
+    log_info "强制重新构建所有容器..."
+    docker-compose build --no-cache
+    check_result "构建容器失败" "continue" "构建容器成功"
+    
+    # 启动服务
+    log_info "启动新构建的容器..."
     docker-compose up -d
-
+    check_result "启动容器失败" "continue" "启动容器成功"
+    
     # 等待服务启动
     log_info "等待服务启动..."
     sleep 10
-
-    # 检查容器状态
-    log_info "检查容器状态..."
-    docker-compose ps
-
-    # 检查Nginx状态
-    log_info "检查Nginx状态..."
-    docker exec frontend nginx -t
-
-    # 测试API连接
-    log_info "测试从前端容器连接后端API..."
-    docker exec frontend curl -s http://backend:5000/api/models | head -n 30
-
-    # 测试主机访问
-    log_info "测试从主机通过Nginx代理访问API..."
-    curl -s http://localhost/api/models | head -n 10
-
-    log_success "容器重建完成！"
-    log_info "请在浏览器中测试应用，确认API请求正常。"
-    log_info "如果问题仍然存在，请检查Docker日志:"
-    log_info "  前端日志: docker logs frontend"
-    log_info "  后端日志: docker logs backend"
+    
+    # 检查服务状态
+    check_status
 }
 
 # 调试API错误
@@ -739,7 +735,7 @@ main() {
                 check_nginx_config
                 ;;
             -rb | --rebuild)
-                rebuild_containers
+                rebuild_services
                 ;;
             -d | --debug-api)
                 debug_api
