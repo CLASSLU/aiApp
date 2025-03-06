@@ -418,3 +418,16 @@ code {
 .bash-code-block pre code .hljs-meta {
     color: #f9e64f;
 } 
+
+.main-content {
+    padding: 0 !important; /* 修改：去掉边距 */
+    display: flex;
+    flex-direction: column;
+    height: 100vh !important; /* 修改：移除页头页脚高度的影响 */
+}
+
+#chat-messages {
+    flex: 1;
+    height: 400px !important; /* 修改：固定高度为400px */
+    overflow-y: auto;
+}
