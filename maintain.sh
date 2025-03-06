@@ -110,9 +110,9 @@ restart_services() {
         ./dev.sh prod restart frontend
         check_result "前端服务重启失败" "continue" "前端服务重启成功"
     else
-        # 使用docker-compose命令重启
-        log_info "使用docker-compose重启服务..."
-        docker-compose restart
+        # 使用docker compose命令重启
+        log_info "使用docker compose重启服务..."
+        docker compose restart
         check_result "服务重启失败" "continue" "服务重启成功"
     fi
     
@@ -127,7 +127,7 @@ check_status() {
     
     # 检查Docker容器状态
     log_info "检查Docker容器状态:"
-    docker ps
+    docker compose ps
     
     # 检查前端Nginx配置
     log_info "验证Nginx配置..."
@@ -218,7 +218,7 @@ fix_nginx_conflict() {
     if [ -f "./dev.sh" ]; then
         ./dev.sh prod up frontend -d
     else
-        docker-compose up -d frontend
+        docker compose up -d frontend
     fi
 
     # 6. 等待服务启动
@@ -371,7 +371,7 @@ rebuild_services() {
     
     # 停止并删除所有容器
     log_info "停止并删除现有容器..."
-    docker-compose down
+    docker compose down
     check_result "停止容器失败" "continue" "停止容器成功"
     
     # 删除所有相关镜像
@@ -388,12 +388,12 @@ rebuild_services() {
     
     # 强制重新构建
     log_info "强制重新构建所有容器..."
-    docker-compose build --no-cache
+    docker compose build --no-cache
     check_result "构建容器失败" "continue" "构建容器成功"
     
     # 启动服务
     log_info "启动新构建的容器..."
-    docker-compose up -d
+    docker compose up -d
     check_result "启动容器失败" "continue" "启动容器成功"
     
     # 等待服务启动
