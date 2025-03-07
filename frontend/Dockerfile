@@ -1,8 +1,10 @@
 # 构建阶段
-FROM alpine:latest as builder
+FROM alpine:3.18
 
-# 安装必要的工具
-RUN apk add --no-cache wget bash ca-certificates
+# 使用国内镜像源
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
+    apk update && \
+    apk add --no-cache wget bash ca-certificates
 
 # 设置工作目录
 WORKDIR /build
@@ -25,7 +27,7 @@ RUN chmod +x download_deps.sh && \
     done
 
 # 最终阶段
-FROM nginx:alpine
+FROM nginx:1.24-alpine
 
 # 复制Nginx配置
 COPY nginx.conf /etc/nginx/conf.d/default.conf
