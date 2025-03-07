@@ -10,34 +10,60 @@ mkdir -p assets/lib/highlight/languages
 mkdir -p assets/lib/font-awesome/{css,webfonts}
 mkdir -p assets/lib/marked
 
-# 下载 highlight.js 相关文件
+# 定义下载函数
+download_with_retry() {
+    local url="$1"
+    local output="$2"
+    local retries=3
+    local wait=5
+    local count=0
+    
+    echo "下载 $output ..."
+    while [ $count -lt $retries ]; do
+        if wget -q --show-progress --timeout=10 -O "$output.tmp" "$url"; then
+            mv "$output.tmp" "$output"
+            return 0
+        fi
+        
+        count=$((count + 1))
+        if [ $count -lt $retries ]; then
+            echo "下载失败，${wait}秒后重试 ($count/$retries)..."
+            sleep $wait
+        fi
+    done
+    
+    echo "下载失败: $url"
+    return 1
+}
+
+# 使用国内CDN镜像
 echo "下载 highlight.js 文件..."
-wget -q --show-progress -O assets/lib/highlight/styles/atom-one-dark.min.css https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/styles/atom-one-dark.min.css
-wget -q --show-progress -O assets/lib/highlight/highlight.min.js https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/highlight.min.js
+download_with_retry "https://cdn.bootcdn.net/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css" "assets/lib/highlight/styles/atom-one-dark.min.css"
+download_with_retry "https://cdn.bootcdn.net/ajax/libs/highlight.js/11.8.0/highlight.min.js" "assets/lib/highlight/highlight.min.js"
 
 # 下载 highlight.js 语言包
 echo "下载 highlight.js 语言包..."
 languages=("python" "javascript" "typescript" "json" "bash" "html" "css" "dockerfile" "yaml")
 for lang in "${languages[@]}"; do
     echo "下载 ${lang} 语言包..."
-    wget -q --show-progress -O assets/lib/highlight/languages/${lang}.min.js https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.8.0/build/languages/${lang}.min.js
+    download_with_retry "https://cdn.bootcdn.net/ajax/libs/highlight.js/11.8.0/languages/${lang}.min.js" "assets/lib/highlight/languages/${lang}.min.js"
 done
 
-# 下载 Font Awesome
+# 下载 Font Awesome（使用国内CDN）
 echo "下载 Font Awesome 文件..."
-wget -q --show-progress -O assets/lib/font-awesome/css/all.min.css https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.0/css/all.min.css
+download_with_retry "https://cdn.bootcdn.net/ajax/libs/font-awesome/6.1.0/css/all.min.css" "assets/lib/font-awesome/css/all.min.css"
 
 # 下载 Font Awesome 字体文件
 echo "下载 Font Awesome 字体文件..."
 webfonts=("fa-solid-900.woff2" "fa-regular-400.woff2" "fa-brands-400.woff2")
 for font in "${webfonts[@]}"; do
     echo "下载 ${font}..."
-    wget -q --show-progress -O assets/lib/font-awesome/webfonts/${font} https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.0/webfonts/${font}
+    download_with_retry "https://cdn.bootcdn.net/ajax/libs/font-awesome/6.1.0/webfonts/${font}" "assets/lib/font-awesome/webfonts/${font}"
 done
 
-# 下载 marked
+# 下载 marked（使用国内CDN）
 echo "下载 marked.js..."
-wget -q --show-progress -O assets/lib/marked/marked.min.js https://cdn.jsdelivr.net/npm/marked@4.0.0/marked.min.js
+download_with_retry "https://cdn.bootcdn.net/ajax/libs/marked/4.0.0/marked.min.js" "assets/lib/marked/marked.min.js"
 
 # 设置文件权限
 echo "设置文件权限..."
